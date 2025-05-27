@@ -5,7 +5,7 @@ prepare_output_bgm = function (
     save_options, burnin, interaction_scale, threshold_alpha, threshold_beta,
     na_action, na_impute, edge_selection, edge_prior, inclusion_probability,
     beta_bernoulli_alpha, beta_bernoulli_beta, dirichlet_alpha, lambda,
-    variable_type) {
+    variable_type, standardize_interactions) {
 
   save = any(c(save_options$save_main, save_options$save_pairwise, save_options$save_indicator))
 
@@ -18,7 +18,8 @@ prepare_output_bgm = function (
     inclusion_probability = inclusion_probability, beta_bernoulli_alpha = beta_bernoulli_alpha,
     beta_bernoulli_beta =  beta_bernoulli_beta,
     dirichlet_alpha = dirichlet_alpha, lambda = lambda, na_action = na_action,
-    save = save, version = packageVersion("bgms")
+    save = save, standardize_interactions = standardize_interactions,
+    version = packageVersion("bgms")
   )
 
   num_variables = ncol(x)
@@ -27,6 +28,12 @@ prepare_output_bgm = function (
   # Basic posterior means
   results$posterior_mean_main = out$main
   results$posterior_mean_pairwise = out$pairwise
+
+  # If standardizing interactions, rescale the estimates back to standardized scale
+  if (standardize_interactions) {
+    rescale_matrix <- outer(num_categories, num_categories, `*`)
+    results$posterior_mean_pairwise <- results$posterior_mean_pairwise * rescale_matrix
+  }
 
   # Assign names to posterior mean matrices
   rownames(results$posterior_mean_main) = data_columnnames
@@ -86,6 +93,12 @@ prepare_output_bgm = function (
     }
     results$pairwise_effect_samples = out$pairwise_samples
     colnames(results$pairwise_effect_samples) = edge_names
+    if (standardize_interactions) {
+      num_edges <- ncol(out$pairwise_samples)
+      rescale_matrix <- outer(num_categories, num_categories, `*`)
+      rescale_factors <- rescale_matrix[lower.tri(rescale_matrix)]
+      results$pairwise_effect_samples <- sweep(results$pairwise_effect_samples, 2, rescale_factors, `*`)
+    }
   }
 
   if (edge_selection && save_options$save_indicator && "inclusion_indicator_samples" %in% names(out)) {

@@ -1177,7 +1177,7 @@ void update_blumecapel_thresholds_with_adaptive_metropolis (
  *  - inclusion_indicator: Symmetric binary matrix indicating which interactions are active.
  *  - is_ordinal_variable: Logical vector indicating ordinal (1) or Blume-Capel (0) variables.
  *  - reference_category: Vector of reference categories for BC variables.
- *  - interaction_scale: Cauchy prior scale on interaction weights.
+ *  - interaction_scale_matrix: Cauchy prior scale on interaction weights.
  *
  * Returns:
  *  - Gradient vector for all pairwise interactions (in upper-triangle order).
@@ -1190,7 +1190,7 @@ arma::vec gradient_log_pseudoposterior_interactions (
     const arma::imat& inclusion_indicator,
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& reference_category,
-    const double interaction_scale
+    const arma::mat& interaction_scale_matrix
 ) {
   const int num_variables = observations.n_cols;
   const int num_observations = observations.n_rows;
@@ -1272,7 +1272,7 @@ arma::vec gradient_log_pseudoposterior_interactions (
 
       // ---- Gradient contribution from Cauchy prior
       const double effect = pairwise_effects (var1, var2);
-      gradient (location) -= 2.0 * effect / (effect * effect + interaction_scale * interaction_scale);
+      gradient (location) -= 2.0 * effect / (effect * effect + interaction_scale_matrix(var1, var2) * interaction_scale_matrix(var1, var2));
     }
   }
 
@@ -1295,7 +1295,7 @@ arma::vec gradient_log_pseudoposterior_interactions (
  *  - num_categories: Vector with number of categories per variable.
  *  - is_ordinal_variable: Logical vector (1 = ordinal, 0 = Blume-Capel).
  *  - reference_category: Vector of reference categories for BC variables.
- *  - interaction_scale: Scale of Cauchy prior.
+ *  - interaction_scale_matrix: Scale of Cauchy prior.
  *
  * Returns:
  *  - A single double value: the gradient with respect to β_ij.
@@ -1309,7 +1309,7 @@ double gradient_log_pseudoposterior_interaction_single (
     const arma::ivec& num_categories,
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& reference_category,
-    const double interaction_scale
+    const arma::mat& interaction_scale_matrix
 ) {
   const int num_persons = observations.n_rows;
 
@@ -1382,7 +1382,7 @@ double gradient_log_pseudoposterior_interaction_single (
 
   // --- Cauchy prior derivative
   double beta = pairwise_effects (var1, var2);
-  gradient -= 2.0 * beta / (beta * beta + interaction_scale * interaction_scale);
+  gradient -= 2.0 * beta / (beta * beta + interaction_scale_matrix(var1, var2) * interaction_scale_matrix(var1, var2));
 
   return gradient;
 }
@@ -1406,7 +1406,7 @@ double gradient_log_pseudoposterior_interaction_single (
  *  - inclusion_indicator: Binary matrix indicating active interactions.
  *  - is_ordinal_variable: Logical vector: 1 = ordinal, 0 = Blume-Capel.
  *  - reference_category: Reference category index per variable (for BC).
- *  - interaction_scale: Cauchy prior scale for interaction terms.
+ *  - interaction_scale_matrix: Cauchy prior scale for interaction terms.
  *
  * Returns:
  *  - Scalar log pseudoposterior (double)
@@ -1419,7 +1419,7 @@ double log_pseudoposterior_interactions (
     const arma::imat& inclusion_indicator,
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& reference_category,
-    const double interaction_scale
+    const arma::mat& interaction_scale_matrix
 ) {
   const int num_variables = observations.n_cols;
   const int num_observations = observations.n_rows;
@@ -1466,7 +1466,7 @@ double log_pseudoposterior_interactions (
   for (int var1 = 0; var1 < num_variables - 1; var1++) {
     for (int var2 = var1 + 1; var2 < num_variables; var2++) {
       if (inclusion_indicator (var1, var2) == 1) {
-        log_pseudo_posterior += R::dcauchy (pairwise_effects (var1, var2), 0.0, interaction_scale, true);
+        log_pseudo_posterior += R::dcauchy (pairwise_effects (var1, var2), 0.0, interaction_scale_matrix (var1, var2), true);
       }
     }
   }
@@ -1494,7 +1494,7 @@ double log_pseudoposterior_interactions (
  *  - inclusion_indicator: Symmetric binary matrix of active interactions.
  *  - is_ordinal_variable: Logical vector (1 = ordinal, 0 = Blume-Capel).
  *  - reference_category: Vector of reference categories (for BC variables).
- *  - interaction_scale: Prior scale for Cauchy prior on interactions.
+ *  - interaction_scale_matrix: Prior scale for Cauchy prior on interactions.
  *
  * Returns:
  *  - A positive step size value that gives roughly 0.574 acceptance rate.
@@ -1507,7 +1507,7 @@ double find_reasonable_initial_step_size_interactions (
     const arma::imat& inclusion_indicator,
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& reference_category,
-    const double interaction_scale
+    const arma::mat& interaction_scale_matrix
 ) {
   const double target_acceptance = 0.574;
   const double initial_step_size = 0.1;
@@ -1534,13 +1534,13 @@ double find_reasonable_initial_step_size_interactions (
   arma::vec gradient = gradient_log_pseudoposterior_interactions (
     pairwise_effects, main_effects, observations, num_categories,
     inclusion_indicator, is_ordinal_variable, reference_category,
-    interaction_scale
+    interaction_scale_matrix
   );
 
   double log_post_current = log_pseudoposterior_interactions (
     pairwise_effects, main_effects, observations, num_categories,
     inclusion_indicator, is_ordinal_variable, reference_category,
-    interaction_scale
+    interaction_scale_matrix
   );
 
   int direction = 0;
@@ -1572,13 +1572,13 @@ double find_reasonable_initial_step_size_interactions (
     double log_post_proposal = log_pseudoposterior_interactions (
       proposal_matrix, main_effects, observations, num_categories,
       inclusion_indicator, is_ordinal_variable, reference_category,
-      interaction_scale
+      interaction_scale_matrix
     );
 
     arma::vec gradient_prop = gradient_log_pseudoposterior_interactions (
       proposal_matrix, main_effects, observations, num_categories,
       inclusion_indicator, is_ordinal_variable, reference_category,
-      interaction_scale
+      interaction_scale_matrix
     );
 
     // Compute log proposal densities
@@ -1626,7 +1626,7 @@ double find_reasonable_initial_step_size_interactions (
  *  - inclusion_indicator: Binary matrix indicating active interactions.
  *  - is_ordinal_variable: Logical vector: 1 = ordinal, 0 = Blume-Capel.
  *  - reference_category: Vector of reference categories for BC variables.
- *  - interaction_scale: Scale parameter for Cauchy prior on interactions.
+ *  - interaction_scale_matrix: Scale parameter for Cauchy prior on interactions.
  *  - step_size_interactions: Current step size (updated if adaptive).
  *  - initial_step_size_interactions: Initial step size used during dual averaging.
  *  - iteration: Current MCMC iteration (0-based).
@@ -1648,7 +1648,7 @@ void update_interactions_with_mala (
     const arma::imat& inclusion_indicator,
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& reference_category,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     double& step_size_interactions,
     const double initial_step_size_interactions,
     const int iteration,
@@ -1673,12 +1673,12 @@ void update_interactions_with_mala (
   // --- Compute gradient and posterior at current state
   arma::vec grad_current = gradient_log_pseudoposterior_interactions (
     pairwise_effects, main_effects, observations, num_categories,
-    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale
+    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale_matrix
   );
 
   double log_post_current = log_pseudoposterior_interactions (
     pairwise_effects, main_effects, observations, num_categories,
-    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale
+    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale_matrix
   );
 
   // --- Generate Langevin proposal
@@ -1703,12 +1703,12 @@ void update_interactions_with_mala (
   // --- Evaluate posterior and gradient at proposed state
   double log_post_proposal = log_pseudoposterior_interactions (
     proposal_matrix, main_effects, observations, num_categories,
-    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale
+    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale_matrix
   );
 
   arma::vec grad_proposed = gradient_log_pseudoposterior_interactions (
     proposal_matrix, main_effects, observations, num_categories,
-    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale
+    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale_matrix
   );
 
   // --- Compute MH log acceptance ratio
@@ -1932,7 +1932,7 @@ double log_pseudolikelihood_ratio_interaction (
  *  - observations: Matrix of category scores.
  *  - num_categories: Number of categories per variable.
  *  - proposal_sd_pairwise_effects: Matrix of proposal standard deviations (updated in-place).
- *  - interaction_scale: Scale parameter for the Cauchy prior.
+ *  - interaction_scale_matrix: Scale parameter for the Cauchy prior.
  *  - num_persons: Number of observations.
  *  - num_variables: Number of variables.
  *  - residual_matrix: Matrix of residual scores (updated in-place).
@@ -1952,7 +1952,7 @@ void update_interactions_with_adaptive_metropolis (
     const arma::imat& observations,
     const arma::ivec& num_categories,
     arma::mat& proposal_sd_pairwise_effects,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     const int num_persons,
     const int num_variables,
     arma::mat& residual_matrix,
@@ -1975,8 +1975,8 @@ void update_interactions_with_adaptive_metropolis (
         );
 
         // Add symmetric Cauchy prior ratio
-        log_acceptance += R::dcauchy(proposed_state, 0.0, interaction_scale, true);
-        log_acceptance -= R::dcauchy(current_state, 0.0, interaction_scale, true);
+        log_acceptance += R::dcauchy(proposed_state, 0.0, interaction_scale_matrix(variable1, variable2), true);
+        log_acceptance -= R::dcauchy(current_state, 0.0, interaction_scale_matrix(variable1, variable2), true);
 
         // Accept proposal with MH step
         if (std::log (R::unif_rand()) < log_acceptance) {
@@ -2016,7 +2016,7 @@ void update_interactions_with_adaptive_metropolis (
  *  - observations: Matrix of category scores.
  *  - num_categories: Number of categories per variable.
  *  - proposal_sd: Matrix of proposal standard deviations for pairwise effects.
- *  - interaction_scale: Scale parameter for the Cauchy prior.
+ *  - interaction_scale_matrix: Scale parameter for the Cauchy prior.
  *  - index: List of interaction pairs to update.
  *  - num_interactions: Number of interaction pairs.
  *  - num_persons: Number of observations.
@@ -2037,7 +2037,7 @@ void update_indicator_interaction_pair_with_metropolis (
     const arma::imat& observations,
     const arma::ivec& num_categories,
     const arma::mat& proposal_sd,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     const arma::imat& index,
     const int num_interactions,
     const int num_persons,
@@ -2068,11 +2068,11 @@ void update_indicator_interaction_pair_with_metropolis (
     const double sd = proposal_sd(variable1, variable2);
 
     if (proposing_addition) {
-      log_accept += R::dcauchy(proposed_state, 0.0, interaction_scale, true);
+      log_accept += R::dcauchy(proposed_state, 0.0, interaction_scale_matrix(variable1, variable2), true);
       log_accept -= R::dnorm(proposed_state, current_state, sd, true);
       log_accept += std::log (inclusion_probability_ij) - std::log (1.0 - inclusion_probability_ij);
     } else {
-      log_accept -= R::dcauchy(current_state, 0.0, interaction_scale, true);
+      log_accept -= R::dcauchy(current_state, 0.0, interaction_scale_matrix(variable1, variable2), true);
       log_accept += R::dnorm(current_state, proposed_state, sd, true);
       log_accept -= std::log (inclusion_probability_ij) - std::log (1.0 - inclusion_probability_ij);
     }
@@ -2111,7 +2111,7 @@ void update_indicator_interaction_pair_with_metropolis (
  *  - observations: Matrix of observed scores.
  *  - num_categories: Vector with number of categories per variable.
  *  - step_size_pairwise: Step size used for MALA proposals.
- *  - interaction_scale: Scale parameter of the Cauchy prior on interaction effects.
+ *  - interaction_scale_matrix: Scale parameter of the Cauchy prior on interaction effects.
  *  - index: Matrix listing all candidate pairs for interaction updates.
  *  - num_interactions: Number of candidate interaction pairs to consider.
  *  - num_persons: Number of observations (individuals).
@@ -2132,7 +2132,7 @@ void update_indicator_interaction_pair_with_mala (
     const arma::imat& observations,
     const arma::ivec& num_categories,
     const double step_size_pairwise,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     const arma::imat& index,
     const int num_interactions,
     const int num_persons,
@@ -2157,7 +2157,7 @@ void update_indicator_interaction_pair_with_mala (
       double grad = gradient_log_pseudoposterior_interaction_single (
         variable1, variable2, pairwise_effects, main_effects, observations,
         num_categories, is_ordinal_variable, reference_category,
-        interaction_scale
+        interaction_scale_matrix
       );
 
       // MALA proposal: Langevin step forward
@@ -2168,7 +2168,7 @@ void update_indicator_interaction_pair_with_mala (
       log_accept -= R::dnorm(proposed_state, forward_mean, proposal_sd, true);
 
       // Cauchy prior on interaction effect
-      log_accept += R::dcauchy(proposed_state, 0.0, interaction_scale, true);
+      log_accept += R::dcauchy(proposed_state, 0.0, interaction_scale_matrix(variable1, variable2), true);
 
       // Prior inclusion probability
       log_accept += std::log (inclusion_probability_ij) - std::log (1.0 - inclusion_probability_ij);
@@ -2181,14 +2181,14 @@ void update_indicator_interaction_pair_with_mala (
       double grad = gradient_log_pseudoposterior_interaction_single (
         variable1, variable2, proposed_matrix, main_effects, observations,
         num_categories, is_ordinal_variable, reference_category,
-        interaction_scale
+        interaction_scale_matrix
       );
       double proposal_sd = std::sqrt(step_size_pairwise);
       double backward_mean = proposed_state + 0.5 * step_size_pairwise * grad;
       log_accept += R::dnorm(current_state, backward_mean, proposal_sd, true);
 
       // Cauchy prior on interaction effect
-      log_accept -= R::dcauchy(current_state, 0.0, interaction_scale, true);
+      log_accept -= R::dcauchy(current_state, 0.0, interaction_scale_matrix(variable1, variable2), true);
       // Prior inclusion probability
       log_accept -= std::log (inclusion_probability_ij) - std::log (1.0 - inclusion_probability_ij);
     }
@@ -2241,7 +2241,7 @@ void update_indicator_interaction_pair_with_mala (
  *  - inclusion_indicator: Binary indicator matrix showing active interaction pairs.
  *  - is_ordinal_variable: Flags indicating ordinal variables.
  *  - reference_category: Reference category index per variable.
- *  - interaction_scale: Scale parameter for the Cauchy prior on interaction weights.
+ *  - interaction_scale_matrix: Scale parameter for the Cauchy prior on interaction weights.
  *  - step_size_pairwise: Current MALA step size (updated in-place).
  *  - initial_step_size_pairwise: Initial step size for dual averaging.
  *  - iteration: Current MCMC iteration.
@@ -2265,7 +2265,7 @@ void update_interactions_with_fisher_mala (
     const arma::imat& inclusion_indicator,
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& reference_category,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     double& step_size_pairwise,
     const double initial_step_size_pairwise,
     const int iteration,
@@ -2292,14 +2292,14 @@ void update_interactions_with_fisher_mala (
   arma::vec current_grad = gradient_log_pseudoposterior_interactions(
       pairwise_effects, main_effects, observations, num_categories,
       inclusion_indicator, is_ordinal_variable, reference_category,
-      interaction_scale
+      interaction_scale_matrix
     );
 
 
   double current_log_post = log_pseudoposterior_interactions (
     pairwise_effects, main_effects, observations, num_categories,
     inclusion_indicator, is_ordinal_variable, reference_category,
-    interaction_scale
+    interaction_scale_matrix
   );
 
   // --- Initialize Fisher matrix after burn-in
@@ -2343,12 +2343,12 @@ void update_interactions_with_fisher_mala (
   // --- Compute gradient and posterior at proposed state
   double proposed_log_post = log_pseudoposterior_interactions(
     proposed_matrix, main_effects, observations, num_categories,
-    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale
+    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale_matrix
   );
 
   arma::vec proposed_grad = gradient_log_pseudoposterior_interactions(
     proposed_matrix, main_effects, observations, num_categories,
-    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale
+    inclusion_indicator, is_ordinal_variable, reference_category, interaction_scale_matrix
   );
 
   // --- Compute forward/reverse correction terms (Titsias 2023, Prop. 1)
@@ -2428,7 +2428,7 @@ void update_interactions_with_fisher_mala (
  *  - observations: Person-by-variable matrix of observed scores.
  *  - num_categories: Number of categories per variable.
  *  - step_size_pairwise: Global MALA step size (scaled internally).
- *  - interaction_scale: Scale parameter for Cauchy prior on interaction weights.
+ *  - interaction_scale_matrix: Scale parameter for Cauchy prior on interaction weights.
  *  - index: Matrix listing candidate interactions: [index, var1, var2].
  *  - num_persons: Number of observations (rows in observations matrix).
  *  - residual_matrix: Linear predictor matrix (updated in-place on accept).
@@ -2452,7 +2452,7 @@ void update_indicator_interaction_pair_with_fisher_mala (
     const arma::imat& observations,
     const arma::ivec& num_categories,
     const double step_size_pairwise,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     const arma::imat& index,
     const int num_persons,
     arma::mat& residual_matrix,
@@ -2497,7 +2497,7 @@ void update_indicator_interaction_pair_with_fisher_mala (
       arma::vec full_grad_current = gradient_log_pseudoposterior_interactions(
         pairwise_effects, main_effects, observations, num_categories,
         indicator, is_ordinal_variable, reference_category,
-        interaction_scale
+        interaction_scale_matrix
       );
       // --- Propose new interaction using preconditioned Langevin step
       const double drift = 0.5 * scaled_step_size * arma::dot(fisher_row, full_grad_current);
@@ -2507,7 +2507,7 @@ void update_indicator_interaction_pair_with_fisher_mala (
       log_accept -= R::dnorm(proposed_state, forward_mean, sd, true);
 
       // --- Cauchy prior + Bernoulli inclusion prior
-      log_accept += R::dcauchy(proposed_state, 0.0, interaction_scale, true);
+      log_accept += R::dcauchy(proposed_state, 0.0, interaction_scale_matrix(var1, var2), true);
       log_accept += std::log(inclusion_probability_ij) - std::log(1.0 - inclusion_probability_ij);
     } else {
       // --- Propose removal of interaction (set to zero)
@@ -2521,14 +2521,14 @@ void update_indicator_interaction_pair_with_fisher_mala (
       arma::vec proposed_grad = gradient_log_pseudoposterior_interactions(
         proposed_matrix, main_effects, observations, num_categories,
         indicator, is_ordinal_variable, reference_category,
-        interaction_scale
+        interaction_scale_matrix
       );
 
       const double drift = 0.5 * scaled_step_size * arma::dot(fisher_row, proposed_grad);
       const double backward_mean = proposed_state + drift;
       log_accept += R::dnorm(current_state, backward_mean, sd, true);
 
-      log_accept -= R::dcauchy(current_state, 0.0, interaction_scale, true);
+      log_accept -= R::dcauchy(current_state, 0.0, interaction_scale_matrix(var1, var2), true);
       log_accept -= std::log(inclusion_probability_ij) - std::log(1.0 - inclusion_probability_ij);
     }
 
@@ -2572,7 +2572,7 @@ void update_indicator_interaction_pair_with_fisher_mala (
  * Inputs:
  *  - observations: Matrix of observed categorical scores (persons × variables).
  *  - num_categories: Number of categories for each variable.
- *  - interaction_scale: Cauchy prior scale for pairwise interaction coefficients.
+ *  - interaction_scale_matrix: Cauchy prior scale for pairwise interaction coefficients.
  *  - proposal_sd_pairwise: Proposal SDs for interaction updates (adaptive Metropolis).
  *  - proposal_sd_main: Proposal SDs for threshold updates (Blume-Capel variables).
  *  - index: List of candidate interaction pairs.
@@ -2622,7 +2622,7 @@ void update_indicator_interaction_pair_with_fisher_mala (
 void gibbs_update_step_for_graphical_model_parameters (
     const arma::imat& observations,
     const arma::ivec& num_categories,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     arma::mat& proposal_sd_pairwise,
     arma::mat& proposal_sd_main,
     const arma::imat& index,
@@ -2665,7 +2665,7 @@ void gibbs_update_step_for_graphical_model_parameters (
       // Use Fisher-preconditioned MALA for inclusion indicators
       update_indicator_interaction_pair_with_fisher_mala (
           pairwise_effects, main_effects, inclusion_indicator, observations,
-          num_categories, step_size_pairwise, interaction_scale, index,
+          num_categories, step_size_pairwise, interaction_scale_matrix, index,
           num_persons, residual_matrix, inclusion_probability, is_ordinal_variable,
           reference_category, sqrt_inv_fisher_pairwise, num_pairwise,
           iteration, total_burnin
@@ -2674,7 +2674,7 @@ void gibbs_update_step_for_graphical_model_parameters (
       // Use standard MALA for indicator updates
       update_indicator_interaction_pair_with_mala (
           pairwise_effects, main_effects, inclusion_indicator, observations,
-          num_categories, step_size_pairwise, interaction_scale,
+          num_categories, step_size_pairwise, interaction_scale_matrix,
           index, num_pairwise, num_persons, residual_matrix,
           inclusion_probability, is_ordinal_variable, reference_category
       );
@@ -2682,7 +2682,7 @@ void gibbs_update_step_for_graphical_model_parameters (
       // Use standard Metropolis-Hastings for indicator updates
       update_indicator_interaction_pair_with_metropolis (
           pairwise_effects, main_effects, inclusion_indicator, observations,
-          num_categories, proposal_sd_pairwise, interaction_scale,
+          num_categories, proposal_sd_pairwise, interaction_scale_matrix,
           index, num_pairwise, num_persons, residual_matrix,
           inclusion_probability, is_ordinal_variable, reference_category
       );
@@ -2694,7 +2694,7 @@ void gibbs_update_step_for_graphical_model_parameters (
     update_interactions_with_fisher_mala (
         pairwise_effects, residual_matrix, main_effects, observations,
         num_categories, inclusion_indicator, is_ordinal_variable,
-        reference_category, interaction_scale, step_size_pairwise,
+        reference_category, interaction_scale_matrix, step_size_pairwise,
         initial_step_size_pairwise, iteration, total_burnin,
         dual_averaging_pairwise, sqrt_inv_fisher_pairwise
     );
@@ -2702,14 +2702,14 @@ void gibbs_update_step_for_graphical_model_parameters (
     update_interactions_with_mala (
         pairwise_effects, residual_matrix, main_effects, observations,
         num_categories, inclusion_indicator, is_ordinal_variable,
-        reference_category, interaction_scale,
+        reference_category, interaction_scale_matrix,
         step_size_pairwise, initial_step_size_pairwise,
         iteration, total_burnin, dual_averaging_pairwise
     );
   } else {
     update_interactions_with_adaptive_metropolis (
         pairwise_effects, main_effects, inclusion_indicator, observations,
-        num_categories, proposal_sd_pairwise, interaction_scale,
+        num_categories, proposal_sd_pairwise, interaction_scale_matrix,
         num_persons, num_variables, residual_matrix,
         exp_neg_log_t_rm_adaptation_rate, is_ordinal_variable,
         reference_category
@@ -2765,7 +2765,7 @@ void gibbs_update_step_for_graphical_model_parameters (
  * Inputs:
  *  - observations: Imputed categorical data.
  *  - num_categories: Number of categories per variable.
- *  - interaction_scale: Scale for Cauchy prior on pairwise interactions.
+ *  - interaction_scale_matrix: Scale for Cauchy prior on pairwise interactions.
  *  - edge_prior: Type of edge prior ("Beta-Bernoulli" or "Stochastic-Block").
  *  - inclusion_probability: Matrix of edge inclusion probabilities (updated if SBM/Beta-Bernoulli).
  *  - beta_bernoulli_alpha, beta_bernoulli_beta: Beta prior parameters for edge inclusion.
@@ -2798,7 +2798,7 @@ void gibbs_update_step_for_graphical_model_parameters (
 List run_gibbs_sampler_for_bgm (
     arma::imat& observations,
     const arma::ivec& num_categories,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     const String& edge_prior,
     arma::mat& inclusion_probability,
     const double beta_bernoulli_alpha,
@@ -2922,7 +2922,7 @@ List run_gibbs_sampler_for_bgm (
     initial_step_size_pairwise = find_reasonable_initial_step_size_interactions (
       pairwise_effects, main_effects, observations, num_categories,
       inclusion_indicator, is_ordinal_variable, reference_category,
-      interaction_scale
+      interaction_scale_matrix
     );
 
     step_size_main = initial_step_size_main;
@@ -2972,7 +2972,7 @@ List run_gibbs_sampler_for_bgm (
 
     // Main Gibbs update step for parameters
     gibbs_update_step_for_graphical_model_parameters (
-        observations, num_categories, interaction_scale, proposal_sd_pairwise,
+        observations, num_categories, interaction_scale_matrix, proposal_sd_pairwise,
         proposal_sd_main, index, num_obs_categories, sufficient_blume_capel,
         threshold_alpha, threshold_beta, num_persons, num_variables, num_pairwise,
         num_main, inclusion_indicator, pairwise_effects, main_effects,

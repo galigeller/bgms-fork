@@ -160,6 +160,17 @@
 #'   \item{"fisher-mala"}{Uses Fisher-preconditioned MALA for both thresholds and interactions.}
 #' }
 #' Defaults to \code{"adaptive-metropolis"}.
+#' @param standardize_interactions Logical. If \code{TRUE}, standardizes the
+#' scale of all pairwise interaction effects by adjusting the prior distribution
+#' and rescaling the output. This ensures that interaction estimates correspond
+#' to inputs that lie in the interval \eqn{[0, 1]}. Internally, this is achieved
+#' via a change of variables: no modification is made to the input data, and
+#' threshold parameters remain unaffected. The Cauchy prior scale for each
+#' interaction is multiplied by the product of the maximum observed values
+#' (i.e., the number of categories) for the corresponding variables. After
+#' sampling, the interaction estimates are rescaled back to match the
+#' standardized interpretation. This approach improves interpretability when
+#' variables have different category ranges. Defaults to \code{FALSE}.
 #'
 #' @return If \code{save = FALSE} (the default), the result is a list of class
 #' ``bgms'' containing the following matrices with model-averaged quantities:
@@ -177,15 +188,17 @@
 #' elements are returned:
 #'   \itemize{
 #'     \item A vector \code{allocations} with the estimated cluster assignments
-#'     of the nodes, calculated using a method proposed by \insertCite{@Dahl2009}{bgms} and
-#'     also used by \insertCite{@GengEtAl_2019}{bgms}.
+#'     of the nodes, calculated using a method proposed by
+#'     \insertCite{@Dahl2009}{bgms} and also used by
+#'     \insertCite{@GengEtAl_2019}{bgms}.
 #'     \item A matrix \code{components} with the estimated posterior probability
-#'     of the number of components (clusters) in the network. These probabilities
-#'     are calculated based on Equation 3.7 in \insertCite{@miller2018mixture}{bgms}, which computes
-#'     the conditional probability of the number of components given the
-#'     number of clusters. The number of clusters is derived from the
-#'     cardinality of the sampled \code{allocations} vector for each iteration of
-#'     the MCMC sampler (see \code{save = TRUE}).
+#'     of the number of components (clusters) in the network. These
+#'     probabilities are calculated based on Equation 3.7 in
+#'     \insertCite{@miller2018mixture}{bgms}, which computes the conditional
+#'     probability of the number of components given the number of clusters. The
+#'     number of clusters is derived from the cardinality of the sampled
+#'     \code{allocations} vector for each iteration of the MCMC sampler (see
+#'     \code{save = TRUE}).
 #'   }
 #' }
 #' If \code{save = TRUE}, the result is a list of class ``bgms'' containing:
@@ -325,7 +338,9 @@ bgm = function(x,
                save_pairwise = FALSE,
                save_indicator = FALSE,
                display_progress = TRUE,
-               update_method = c("adaptive-metropolis", "adaptive-mala", "fisher-mala")
+               update_method = c("adaptive-metropolis", "adaptive-mala", "fisher-mala"),
+               standardize_interactions = FALSE
+
 ) {
 
   # Deprecation warning for save parameter
@@ -346,6 +361,11 @@ bgm = function(x,
   update_method_input = update_method
   update_method = match.arg(update_method)
 
+  # Check standardization option
+  standardize_interactions = as.logical(standardize_interactions)
+  if (is.na(standardize_interactions)) {
+    stop("standardize_interactions must be TRUE or FALSE.")
+  }
 
   #Check data input ------------------------------------------------------------
   if(!inherits(x, what = "matrix") && !inherits(x, what = "data.frame"))
@@ -474,11 +494,25 @@ bgm = function(x,
     }
   }
 
+  # Compute the interaction scale matrix ----------------------------------------
+  if (standardize_interactions) {
+    # Use num_categories as proxy for max_vals
+    interaction_scale_matrix <- outer(num_categories, num_categories, function(a, b) {
+      interaction_scale * a * b
+    })
+  } else {
+    # Use scalar interaction_scale repeated over matrix
+    interaction_scale_matrix <- matrix(interaction_scale,
+                                       nrow = length(num_categories),
+                                       ncol = length(num_categories))
+  }
+
   # Call the Rcpp function
   out = run_gibbs_sampler_for_bgm (
     observations = x, num_categories = num_categories,
-    interaction_scale = interaction_scale, edge_prior = edge_prior,
-    inclusion_probability = inclusion_probability, beta_bernoulli_alpha = beta_bernoulli_alpha,
+    interaction_scale_matrix = interaction_scale_matrix,
+    edge_prior = edge_prior, inclusion_probability = inclusion_probability,
+    beta_bernoulli_alpha = beta_bernoulli_alpha,
     beta_bernoulli_beta = beta_bernoulli_beta,
     dirichlet_alpha = dirichlet_alpha, lambda = lambda,
     interaction_index_matrix = interaction_index_matrix,
@@ -507,7 +541,7 @@ bgm = function(x,
     beta_bernoulli_alpha = beta_bernoulli_alpha,
     beta_bernoulli_beta = beta_bernoulli_beta,
     dirichlet_alpha = dirichlet_alpha, lambda = lambda,
-    variable_type = variable_type
+    variable_type = variable_type, standardize_interactions = standardize_interactions
   )
 
   return(output)
