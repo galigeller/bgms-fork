@@ -5,10 +5,12 @@
 * The bgmCompare function now allows for network comparison for two or more groups.
 * The new summary_sbm function can be used to summarize the output from the bgm function with the "Stochastic-Block" prior. 
 * The `standardize_interactions` option can now be used to standardize pairwise interaction effects in the bgm and bgmCompare functions. This is useful for setting the prior on interaction effects for variables with a different number of categories on a common scale.
+
 ## Other changes
 
 * The bgm function with the "Stochastic-Block" prior can now also return the sampled allocations and block probabilities, and sample and return the number of blocks.
 * The underlying R and c++ functions received a massive update to improve their efficiency and maintainance.
+* The Blume-Capel model is reformulated in terms of difference scores throughout to more closely match the original formulation.
 
 ## Bug fixes
 

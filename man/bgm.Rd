@@ -248,7 +248,7 @@ category, such as the ``neutral'' in a Likert scale, and responses are scored
 in terms of their distance to this reference category. Specifically, the
 Blume-Capel model specifies the following quadratic model for the threshold
 parameters:
-\deqn{\mu_{\text{c}} = \alpha \times \text{c} + \beta \times (\text{c} - \text{r})^2,}{{\mu_{\text{c}} = \alpha \times \text{c} + \beta \times (\text{c} - \text{r})^2,}}
+\deqn{\mu_{\text{c}} = \alpha \times (\text{c}-r) + \beta \times (\text{c} - \text{r})^2,}{{\mu_{\text{c}} = \alpha \times (\text{c} - \text{r}) + \beta \times (\text{c} - \text{r})^2,}}
 where \eqn{\mu_{\text{c}}}{\mu_{\text{c}}} is the threshold for category c.
 The parameter \eqn{\alpha}{\alpha} models a linear trend across categories,
 such that \eqn{\alpha > 0}{\alpha > 0} leads to an increasing number of
@@ -260,7 +260,8 @@ there is a preference to respond in the reference category (i.e., the model
 introduces a penalty for responding in a category further away from the
 reference_category category \code{r}), while if \eqn{\beta > 0}{\beta > 0}
 there is preference to score in the extreme categories further away from the
-reference_category category.
+reference_category category. The pairwise interactions are also formulated
+in terms of pairwise products of difference scores rather than category scores.
 
 The Bayesian estimation procedure (\code{edge_selection = FALSE}) simply
 estimates the threshold and pairwise interaction parameters of the ordinal

@@ -25,8 +25,8 @@
 #'    - \eqn{\boldsymbol{\epsilon}_{ic}}{\boldsymbol{\epsilon}_{ic}} represents group-specific differences constrained to sum to zero.
 #'
 #' 2. **Blume-Capel ordinal variables**: Assume a specific reference category and score responses based on distance to it:
-#'    \deqn{\boldsymbol{\mu}_{ic} = (\tau_{i1} + \boldsymbol{\epsilon}_{i1}) \cdot c + (\tau_{i2} + \boldsymbol{\epsilon}_{i2}) \cdot (c - r)^2,}{
-#'    \boldsymbol{\mu}_{ic} = (\tau_{i1} + \boldsymbol{\epsilon}_{i1}) \cdot c + (\tau_{i2} + \boldsymbol{\epsilon}_{i2}) \cdot (c - r)^2,}
+#'    \deqn{\boldsymbol{\mu}_{ic} = (\tau_{i1} + \boldsymbol{\epsilon}_{i1}) \cdot (c - r) + (\tau_{i2} + \boldsymbol{\epsilon}_{i2}) \cdot (c - r)^2,}{
+#'    \boldsymbol{\mu}_{ic} = (\tau_{i1} + \boldsymbol{\epsilon}_{i1}) \cdot (c - r) + (\tau_{i2} + \boldsymbol{\epsilon}_{i2}) \cdot (c - r)^2,}
 #'    where:
 #'    - `r` is the reference category.
 #'    - \eqn{\tau_{i1}}{\tau_{i1}} and \eqn{\tau_{i2}}{\tau_{i2}} are nuisance parameters.
@@ -225,11 +225,17 @@ bgmCompare = function(x,
   num_obs_categories = compute_num_obs_categories(x, num_categories, group)
 
 
-  # Compute sufficient statistics for Blume-Capel variables
+  # Compute sufficient statistics for Blume-Capel variables and recode x
   sufficient_blume_capel = compute_sufficient_blume_capel(x, reference_category,ordinal_variable, group)
+  if(any(!variable_bool)) {
+    index = which(!variable_bool)
+    for(i in index) {
+      x[, i] = x[, i] - reference_category[i]
+    }
+  }
 
 
-# Index vector used to sample interactions in a random order -----------------
+  # Index vector used to sample interactions in a random order -----------------
   Index = matrix(0, nrow = num_interactions, ncol = 3)
   counter = 0
   for(variable1 in 1:(num_variables - 1)) {
@@ -294,7 +300,7 @@ bgmCompare = function(x,
       # distance to the reference category.
       i = which(!variable_bool)
       max_vals[i] = sapply(i, function(variable) {
-        max(abs(x[, variable] - reference_category[variable]))
+        max(abs(observations[, variable])) #These observations have already been recoded as x-ref
       })
     }
 

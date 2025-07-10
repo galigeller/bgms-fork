@@ -313,7 +313,10 @@ void impute_missing_values_for_graphical_model (
       sampled_score++;
     }
 
-    const int new_value = sampled_score;
+    int new_value = sampled_score;
+    if(is_ordinal == false) {
+      new_value -= reference_category (variable);
+    }
     const int old_value = observations(person, variable);
 
     if (new_value != old_value) {
@@ -324,20 +327,15 @@ void impute_missing_values_for_graphical_model (
         num_obs_categories(old_value, variable)--;
         num_obs_categories(new_value, variable)++;
       } else {
-        const int ref = reference_category(variable);
         const int delta = new_value - old_value;
-        const int delta_sq =
-          (new_value - ref) * (new_value - ref) -
-          (old_value - ref) * (old_value - ref);
+        const int delta_sq = new_value * new_value - old_value * old_value;
 
         sufficient_blume_capel(0, variable) += delta;
         sufficient_blume_capel(1, variable) += delta_sq;
-        //For Blume-Capel variables there is no need to update the centered score in the observations matrix when the pairwise_effect is constant
       }
 
       // Update residuals across all variables
       for (int var = 0; var < num_variables; var++) {
-        //For Blume-Capel variables there is no need to update the centered score when the pairwise_effect is constant
         const double delta_score = (new_value - old_value) * pairwise_effects(var, variable);
         residual_matrix(person, var) += delta_score;
       }

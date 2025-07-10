@@ -507,7 +507,7 @@ bgm = function(x,
       # distance to the reference category.
       i = which(!variable_bool)
       max_vals[i] = sapply(i, function(variable) {
-        max(abs(x[, variable] - reference_category[variable]))
+        max(abs(x[, variable])) # These variables have already been recoded as x-ref above
       })
     }
 

@@ -174,14 +174,14 @@ List impute_missing_data_for_anova_model(
     } else {
       // For Blume-Capel variables
       cumsum = 0.0;
-      for(int category = 0; category <= num_categories(variable, gr); category++) {
-        exponent = GroupThresholds[0] * category;
-        exponent += GroupThresholds[1] *
-          (category - baseline_category[variable]) *
-          (category - baseline_category[variable]);
-        exponent += category * rest_score;
+      const int ref = baseline_category[variable];
+      for(int cat = 0; cat <= num_categories(variable, gr); cat++) {
+        int centered = cat - ref;
+        exponent = GroupThresholds[0] * centered;
+        exponent += GroupThresholds[1] * centered * centered;
+        exponent += centered * rest_score;
         cumsum += std::exp(exponent);
-        category_response_probabilities[category] = cumsum;
+        category_response_probabilities[cat] = cumsum;
       }
     }
 
@@ -191,7 +191,11 @@ List impute_missing_data_for_anova_model(
     while (u > category_response_probabilities[score]) {
       score++;
     }
+
     new_observation = score;
+    if(is_ordinal_variable[variable] == false) {
+      new_observation -= baseline_category[variable];
+    }
     old_observation = observations(person, variable);
 
     if(old_observation != new_observation) {
@@ -210,12 +214,8 @@ List impute_missing_data_for_anova_model(
         arma::imat sufficient_blume_capel_gr = sufficient_blume_capel[gr];
         sufficient_blume_capel_gr(0, variable) -= old_observation;
         sufficient_blume_capel_gr(0, variable) += new_observation;
-        sufficient_blume_capel_gr(1, variable) -=
-          (old_observation - baseline_category[variable]) *
-          (old_observation - baseline_category[variable]);
-        sufficient_blume_capel_gr(1, variable) +=
-          (new_observation - baseline_category[variable]) *
-          (new_observation - baseline_category[variable]);
+        sufficient_blume_capel_gr(1, variable) -= old_observation * old_observation;
+        sufficient_blume_capel_gr(1, variable) += new_observation * new_observation;
         sufficient_blume_capel[gr] = sufficient_blume_capel_gr;
       }
 
@@ -340,14 +340,14 @@ double log_pseudolikelihood_ratio_interaction(
           }
         } else {
           // Blume-Capel ordinal MRF variable
+          int ref = baseline_category[var];
           for(int cat = 0; cat <= n_cats; cat++) {
-            exponent = GroupThresholds[0] * cat;
-            exponent += GroupThresholds[1] *
-              (cat - baseline_category[var]) *
-              (cat - baseline_category[var]);
-            exponent += cat * rest_score - bound;
-            denominator_prop += std::exp(exponent + cat * obs_proposed);
-            denominator_curr += std::exp(exponent + cat * obs_current);
+            int centered = cat - ref;
+            exponent = GroupThresholds[0] * centered;
+            exponent += GroupThresholds[1] * centered * centered;
+            exponent += centered * rest_score - bound;
+            denominator_prop += std::exp(exponent + centered * obs_proposed);
+            denominator_curr += std::exp(exponent + centered * obs_current);
           }
         }
 
@@ -582,13 +582,14 @@ double log_pseudolikelihood_ratio_pairwise_difference(
           // Blume-Capel ordinal MRF variable
           denominator_prop = 0.0;
           denominator_curr = 0.0;
+          int ref = baseline_category[var];
           for (int cat = 0; cat <= n_cats; cat++) {
-            exponent = GroupThresholds[0] * cat +
-              GroupThresholds[1] * (cat - baseline_category[var]) *
-              (cat - baseline_category[var]) +
-              cat * rest_score - bound;
-            denominator_prop += std::exp(exponent + cat * obs_proposed_p);
-            denominator_curr += std::exp(exponent + cat * obs_current_p);
+            int centered = cat - ref;
+            exponent = GroupThresholds[0] * centered +
+              GroupThresholds[1] * centered * centered +
+              centered * rest_score - bound;
+            denominator_prop += std::exp(exponent + centered * obs_proposed_p);
+            denominator_curr += std::exp(exponent + centered * obs_current_p);
           }
         }
 
@@ -830,13 +831,14 @@ double log_pseudolikelihood_ratio_pairwise_differences(
             denominator_prop += std::exp(exponent + score * obs_proposed_p);
           }
         } else {
+          int ref = baseline_category[var];
           for (int cat = 0; cat <= n_cats; cat++) {
-            double exponent = GroupThresholds[0] * cat +
-              GroupThresholds[1] * (cat - baseline_category[var]) *
-              (cat - baseline_category[var]) +
-              rest_score * cat - bound;
-            denominator_curr += std::exp(exponent + cat * obs_current_p);
-            denominator_prop += std::exp(exponent + cat * obs_proposed_p);
+            int centered = cat - ref;
+            double exponent = GroupThresholds[0] * centered +
+              GroupThresholds[1] * centered * centered +
+              rest_score * centered - bound;
+            denominator_curr += std::exp(exponent + centered * obs_current_p);
+            denominator_prop += std::exp(exponent + centered * obs_proposed_p);
           }
         }
 
@@ -1353,6 +1355,7 @@ double log_pseudolikelihood_ratio_thresholds_blumecapel(
   double pseudolikelihood_ratio = 0.0;
   int linear_score, quadratic_score;
   int cat_index = main_effect_indices(variable, 0);
+  const int ref = baseline_category[variable];
 
   // Loop over all groups
   for(int gr = 0; gr < num_groups; gr++) {
@@ -1361,9 +1364,8 @@ double log_pseudolikelihood_ratio_thresholds_blumecapel(
     arma::vec constant_denominator (num_categories(variable, gr) + 1);
 
     for(int category = 0; category <= num_categories(variable, gr); category++) {
-      linear_score = category;
-      quadratic_score = (category - baseline_category[variable]) *
-        (category - baseline_category[variable]);
+      linear_score = category - ref;
+      quadratic_score =  linear_score *  linear_score;
 
       // Linear and quadratic contributions for current and proposed states
       constant_numerator[category] = linear_current * linear_score;
@@ -1408,7 +1410,7 @@ double log_pseudolikelihood_ratio_thresholds_blumecapel(
     for(int person = group_indices(gr, 0); person <= group_indices(gr, 1); person++) {
       rest_score = residual_matrix(person, variable);
       if(rest_score > 0) {
-        bound = num_categories(variable, gr) * rest_score + lbound;
+        bound = (num_categories(variable, gr) - ref) * rest_score + lbound;
       } else {
         bound = lbound;
       }
@@ -1417,7 +1419,7 @@ double log_pseudolikelihood_ratio_thresholds_blumecapel(
       numerator = 0.0;
       denominator = 0.0;
       for(int category = 0; category <= num_categories[variable]; category ++) {
-        exponent = category * rest_score - bound;
+        exponent = (category - ref) * rest_score - bound;
         numerator += std::exp(constant_numerator[category] + exponent);
         denominator += std::exp(constant_denominator[category] + exponent);
       }
@@ -1595,6 +1597,7 @@ double log_pseudolikelihood_ratio_main_difference_blumecapel(
   double pseudolikelihood_ratio = 0.0; // Accumulated log pseudo-likelihood ratio
   int linear_score, quadratic_score; // Scores for linear and quadratic terms
   int cat_index = main_effect_indices(variable, 0); // Base index for variable categories
+  int ref = baseline_category[variable];
 
   // Loop over all groups
   for(int gr = 0; gr < num_groups; gr++) {
@@ -1606,9 +1609,8 @@ double log_pseudolikelihood_ratio_main_difference_blumecapel(
     // Pre-compute terms for all categories in the current group
     for(int category = 0; category <= num_categories(variable, gr); category++) {
       // Compute linear and quadratic scores for the current category
-      linear_score = category;
-      quadratic_score = (category - baseline_category[variable]) *
-        (category - baseline_category[variable]);
+      linear_score = category - ref;
+      quadratic_score = linear_score * linear_score;
 
       // Initialize numerator and denominator contributions with main effects
       constant_numerator[category] = main_effects(cat_index, 0) * linear_score;
@@ -1660,7 +1662,7 @@ double log_pseudolikelihood_ratio_main_difference_blumecapel(
     for(int person = group_indices(gr, 0); person <= group_indices(gr, 1); person++) {
       rest_score = residual_matrix(person, variable);
       if(rest_score > 0) {
-        bound = num_categories(variable, gr) * rest_score + lbound;
+        bound = (num_categories(variable, gr) - ref) * rest_score + lbound;
       } else {
         bound = lbound;
       }
@@ -1671,7 +1673,7 @@ double log_pseudolikelihood_ratio_main_difference_blumecapel(
 
       // Compute category-specific contributions
       for(int category = 0; category <= num_categories[variable]; category ++) {
-        exponent = category * rest_score - bound;
+        exponent = (category - ref) * rest_score - bound;
         numerator += std::exp(constant_numerator[category] + exponent);
         denominator += std::exp(constant_denominator[category] + exponent);
       }
@@ -2023,17 +2025,17 @@ void metropolis_thresholds_blumecapel_free(
   int cat_index = main_effect_indices(variable, 0);
   double current_state = main_effects(cat_index, group);
   double proposed_state = R::rnorm(current_state, proposal_sd_main_effects(cat_index, group));
+  int ref = baseline_category[variable];
 
   // Difference between proposed and current state
   double difference = proposed_state - current_state;
 
   // Precompute constants for likelihood ratio calculation
   for(int category = 0; category <= num_categories(variable, group); category ++) {
-    double exponent = main_effects(cat_index + 1, group) *
-      (category - baseline_category[variable]) *
-      (category - baseline_category[variable]);
-    constant_numerator[category] = current_state * category + exponent;
-    constant_denominator[category] = proposed_state * category + exponent;
+    int centered = category - ref;
+    double exponent = main_effects(cat_index + 1, group) * centered * centered;
+    constant_numerator[category] = current_state * centered + exponent;
+    constant_denominator[category] = proposed_state * centered + exponent;
   }
 
   // Precompute bounds for numerical stability
@@ -2057,14 +2059,15 @@ void metropolis_thresholds_blumecapel_free(
     double rest_score = residual_matrix(person, variable);
     double bound = lbound;
     if(rest_score > 0) {
-      bound += num_categories(variable, group) * rest_score;
+      bound += (num_categories(variable, group) - ref) * rest_score;
     }
 
     // Compute likelihood numerator and denominator
-    double numerator = std::exp(constant_numerator[0] - bound);
-    double denominator = std::exp(constant_denominator[0] - bound);
-    for(int score = 1; score <= num_categories(variable, group); score++) {
-      double exponent = score * rest_score - bound;
+    double numerator = 0.0;
+    double denominator = 0.0;
+    for(int score = 0; score <= num_categories(variable, group); score++) {
+      int centered = score - ref;
+      double exponent = centered * rest_score - bound;
       numerator += std::exp(constant_numerator[score] + exponent);
       denominator += std::exp(constant_denominator[score] + exponent);
     }
@@ -2095,9 +2098,9 @@ void metropolis_thresholds_blumecapel_free(
 
   // Recompute constants for quadratic term
   for(int category = 0; category <= num_categories(variable, group); category ++) {
-    double exponent = main_effects(cat_index, group) * category;
-    int score = (category - baseline_category[variable]) *
-      (category - baseline_category[variable]);
+    int centered = category - baseline_category[variable];
+    double exponent = main_effects(cat_index, group) * centered;
+    int score = centered * centered;
 
     constant_numerator[category] = current_state * score + exponent;
     constant_denominator[category] = proposed_state * score + exponent;
@@ -2123,14 +2126,14 @@ void metropolis_thresholds_blumecapel_free(
     double rest_score = residual_matrix(person, variable);
     double bound = lbound;
     if(rest_score > 0) {
-      bound += num_categories[variable] * rest_score;
+      bound += (num_categories[variable] - ref) * rest_score;
     }
 
-    double numerator = std::exp(constant_numerator[0] - bound);
-    double denominator = std::exp(constant_denominator[0] - bound);
-
-    for(int score = 1; score <= num_categories(variable, group); score ++) {
-      double exponent = score * rest_score - bound;
+    double numerator = 0.0;
+    double denominator = 0.0;
+    for(int score = 0; score <= num_categories(variable, group); score ++) {
+      int centered = score - ref;
+      double exponent = centered * rest_score - bound;
       numerator += std::exp(constant_numerator[score] + exponent);
       denominator += std::exp(constant_denominator[score] + exponent);
     }
@@ -2396,6 +2399,7 @@ double log_pseudolikelihood_ratio_main_difference_blume_capel_between_model(
 
   // Determine the number of categories for the variable
   int num_cats = num_categories(variable, 0);
+  int ref = baseline_category[variable];
 
   // Storage for current and proposed Blume-Capel parameters
   arma::vec current_parameters(2); // Linear and quadratic parameters
@@ -2424,13 +2428,11 @@ double log_pseudolikelihood_ratio_main_difference_blume_capel_between_model(
     arma::vec proposed_denominator_constant (num_cats + 1);
 
     for(int cat = 0; cat <= num_cats; cat++) {
-      int linear_score = cat;
-      int quadratic_score = (cat - baseline_category[variable]) *
-                            (cat - baseline_category[variable]);
+      int linear_score = cat - ref;
+      int quadratic_score = linear_score * linear_score;
 
       current_denominator_constant[cat] = current_parameters[0] * linear_score;
       current_denominator_constant[cat] += current_parameters[1] * quadratic_score;
-
       proposed_denominator_constant[cat] = proposed_parameters[0] * linear_score ;
       proposed_denominator_constant[cat] += proposed_parameters[1] * quadratic_score;
     }
@@ -2447,7 +2449,7 @@ double log_pseudolikelihood_ratio_main_difference_blume_capel_between_model(
     for(int person = group_indices(gr, 0); person <= group_indices(gr, 1); person++) {
       // Compute the residual score
       double rest_score = residual_matrix(person, variable);
-      double bound = (rest_score > 0) ? lbound + num_cats * rest_score : lbound;
+      double bound = (rest_score > 0) ? lbound + (num_cats - ref) * rest_score : lbound;
 
       // Compute the denominators for the current and proposed states
       double denominator_proposed = 0.0;
@@ -2455,7 +2457,7 @@ double log_pseudolikelihood_ratio_main_difference_blume_capel_between_model(
 
       // Compute category-specific contributions
       for(int cat = 0; cat <= num_cats; cat++) {
-        double exponent = cat * rest_score - bound;
+        double exponent = (cat - ref) * rest_score - bound;
         denominator_proposed += std::exp(proposed_denominator_constant[cat] + exponent);
         denominator_current += std::exp(current_denominator_constant[cat] + exponent);
       }
