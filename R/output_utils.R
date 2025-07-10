@@ -146,7 +146,8 @@ prepare_output_bgmCompare = function(out, x, independent_thresholds,
                                      main_beta_bernoulli_beta,
                                      main_difference_scale,
                                      pairwise_difference_scale,
-                                     projection, is_ordinal_variable) {
+                                     projection, is_ordinal_variable,
+                                     standardize_interactions) {
 
   save = any(c(save_options$save_main, save_options$save_pairwise, save_options$save_indicator))
 
