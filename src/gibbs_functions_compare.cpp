@@ -381,7 +381,7 @@ double log_pseudolikelihood_ratio_interaction(
  *  - is_ordinal_variable: Logical vector indicating whether each variable is ordinal.
  *  - baseline_category: Integer vector indicating the reference categories for Blume-Capel variables.
  *  - proposal_sd_pairwise_effects: Numeric matrix of proposal standard deviations for pairwise interaction parameters.
- *  - interaction_scale: Scale parameter for the prior distribution of interaction terms.
+ *  - interaction_scale_matrix: Scale parameter for the prior distribution of interaction terms.
  *  - num_variables: Total number of variables in the analysis.
  *  - exp_neg_log_t_rm_adaptation_rate: Precomputed Robbins-Monro decay term.
  *  - target_acceptance_rate: Target log acceptance rate for the Metropolis-Hastings updates.
@@ -409,7 +409,7 @@ void metropolis_interaction(
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& baseline_category,
     arma::mat& proposal_sd_pairwise_effects,
-    double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     const int num_variables,
     const double exp_neg_log_t_rm_adaptation_rate,
     const double target_acceptance_rate,
@@ -438,8 +438,8 @@ void metropolis_interaction(
         is_ordinal_variable, baseline_category);
 
       // Add prior probabilities for the interaction parameter
-      log_acceptance_probability += R::dcauchy(proposed_state, 0.0, interaction_scale, true);
-      log_acceptance_probability -= R::dcauchy(current_state, 0.0, interaction_scale, true);
+      log_acceptance_probability += R::dcauchy(proposed_state, 0.0, interaction_scale_matrix(variable1, variable2), true);
+      log_acceptance_probability -= R::dcauchy(current_state, 0.0, interaction_scale_matrix(variable1, variable2), true);
 
       // Metropolis-Hastings acceptance step
       U = R::unif_rand();
@@ -624,7 +624,7 @@ double log_pseudolikelihood_ratio_pairwise_difference(
  *  - is_ordinal_variable: Logical vector indicating whether each variable is ordinal.
  *  - baseline_category: Integer vector indicating the reference categories for Blume-Capel variables.
  *  - proposal_sd_pairwise_effects: Numeric matrix of proposal standard deviations for pairwise interaction parameters.
- *  - pairwise_difference_scale: Scale parameter for the prior distribution of pairwise differences.
+ *  - pairwise_difference_scale_matrix: Scale parameter for the prior distribution of pairwise differences.
  *  - num_variables: Total number of variables in the analysis.
  *  - exp_neg_log_t_rm_adaptation_rate: Precomputed Robbins-Monro decay term
  *  - target_acceptance_rate: Target log acceptance rate for the Metropolis-Hastings updates.
@@ -652,7 +652,7 @@ void metropolis_pairwise_difference(
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& baseline_category,
     arma::mat& proposal_sd_pairwise_effects,
-    const double pairwise_difference_scale,
+    const arma::mat& pairwise_difference_scale_matrix,
     const int num_variables,
     const double exp_neg_log_t_rm_adaptation_rate,
     const double target_acceptance_rate,
@@ -683,8 +683,8 @@ void metropolis_pairwise_difference(
             is_ordinal_variable, baseline_category);
 
           // Add prior probabilities for the pairwise difference parameter
-          log_acceptance_probability += R::dcauchy(proposed_state, 0.0, pairwise_difference_scale, true);
-          log_acceptance_probability -= R::dcauchy(current_state, 0.0, pairwise_difference_scale, true);
+          log_acceptance_probability += R::dcauchy(proposed_state, 0.0, pairwise_difference_scale_matrix(variable1, variable2), true);
+          log_acceptance_probability -= R::dcauchy(current_state, 0.0, pairwise_difference_scale_matrix(variable1, variable2), true);
 
           // Metropolis-Hastings acceptance step
           U = R::unif_rand();
@@ -875,7 +875,7 @@ double log_pseudolikelihood_ratio_pairwise_differences(
  *   - is_ordinal_variable: arma::uvec indicating whether variables are ordinal.
  *   - baseline_category: arma::ivec specifying reference categories for each variable.
  *   - proposal_sd_pairwise_effects: arma::mat of proposal standard deviations for pairwise differences.
- *   - pairwise_difference_scale: Double representing the scale of the prior distribution
+ *   - pairwise_difference_scale_matrix: Double representing the scale of the prior distribution
  *                                for pairwise differences.
  *   - num_pairwise: Total number of pairwise differences.
  *
@@ -901,7 +901,7 @@ void metropolis_pairwise_difference_between_model(
     const arma::uvec& is_ordinal_variable,
     const arma::ivec& baseline_category,
     arma::mat& proposal_sd_pairwise_effects,
-    const double pairwise_difference_scale,
+    const arma::mat& pairwise_difference_scale_matrix,
     const int num_pairwise
 ) {
   // Vectors to store current and proposed states for pairwise differences
@@ -926,12 +926,12 @@ void metropolis_pairwise_difference_between_model(
       // Update log probabilities based on the inclusion inclusion_indicator
       if (inclusion_indicator(variable1, variable2) == 1) {
         // Difference is included
-        log_acceptance_probability -= R::dcauchy(current_state, 0.0, pairwise_difference_scale, true);
+        log_acceptance_probability -= R::dcauchy(current_state, 0.0, pairwise_difference_scale_matrix(variable1, variable2), true);
         log_acceptance_probability += R::dnorm(current_state, proposed_state, proposal_sd_pairwise_effects(int_index, h), true);
       } else {
         // Propose a new state
         proposed_state = R::rnorm(current_state, proposal_sd_pairwise_effects(int_index, h));
-        log_acceptance_probability += R::dcauchy(proposed_state, 0.0, pairwise_difference_scale, true);
+        log_acceptance_probability += R::dcauchy(proposed_state, 0.0, pairwise_difference_scale_matrix(variable1, variable2), true);
         log_acceptance_probability -= R::dnorm(proposed_state, current_state, proposal_sd_pairwise_effects(int_index, h), true);
       }
 
@@ -2633,9 +2633,9 @@ void metropolis_main_difference_blume_capel_between_model(
  *   - inclusion_probability_difference: arma::mat for inclusion probabilities of pairwise differences.
  *   - proposal_sd_main_effects: arma::mat of proposal standard deviations for main effects.
  *   - proposal_sd_pairwise_effects: arma::mat of proposal standard deviations for pairwise effects.
- *   - interaction_scale: Scale parameter for pairwise interaction priors.
+ *   - interaction_scale_matrix: Scale parameter for pairwise interaction priors.
  *   - main_difference_scale: Scale parameter for main difference priors.
- *   - pairwise_difference_scale: Scale parameter for pairwise difference priors.
+ *   - pairwise_difference_scale_matrix: Scale parameter for pairwise difference priors.
  *   - prior_threshold_alpha: Shape parameter for the threshold prior distribution.
  *   - prior_threshold_beta: Rate parameter for the threshold prior distribution.
  *   - rm_adaptation_rate: Robbins-Monro learning rate parameter.
@@ -2685,9 +2685,9 @@ List gibbs_step_gm(
     const arma::mat& inclusion_probability_difference,
     arma::mat& proposal_sd_main_effects,
     arma::mat& proposal_sd_pairwise_effects,
-    const double interaction_scale,
+    const arma::mat& interaction_scale_matrix,
     const double main_difference_scale,
-    const double pairwise_difference_scale,
+    const arma::mat& pairwise_difference_scale_matrix,
     const double prior_threshold_alpha,
     const double prior_threshold_beta,
     const double rm_adaptation_rate,
@@ -2709,7 +2709,7 @@ List gibbs_step_gm(
     pairwise_effect_indices, projection, observations, num_groups,
     group_indices, num_categories, independent_thresholds, num_persons,
     residual_matrix, is_ordinal_variable, baseline_category,
-    proposal_sd_pairwise_effects, interaction_scale, num_variables,
+    proposal_sd_pairwise_effects, interaction_scale_matrix, num_variables,
     exp_neg_log_t_rm_adaptation_rate, target_acceptance_rate, rm_lower_bound,
     rm_upper_bound);
 
@@ -2722,7 +2722,7 @@ List gibbs_step_gm(
       num_groups, group_indices, num_categories, independent_thresholds,
       inclusion_indicator, residual_matrix, is_ordinal_variable,
       baseline_category, proposal_sd_pairwise_effects,
-      pairwise_difference_scale, num_pairwise);
+      pairwise_difference_scale_matrix, num_pairwise);
   }
 
   // Step 3: Update pairwise differences
@@ -2731,7 +2731,7 @@ List gibbs_step_gm(
     pairwise_effect_indices, projection, observations, num_groups,
     group_indices, num_categories, independent_thresholds, inclusion_indicator,
     residual_matrix, is_ordinal_variable, baseline_category,
-    proposal_sd_pairwise_effects, pairwise_difference_scale, num_variables,
+    proposal_sd_pairwise_effects, pairwise_difference_scale_matrix, num_variables,
     exp_neg_log_t_rm_adaptation_rate, target_acceptance_rate, rm_lower_bound,
     rm_upper_bound);
 
@@ -2832,8 +2832,8 @@ List gibbs_step_gm(
  *   - num_categories: arma::imat containing category counts for each variable and group.
  *   - num_groups: Total number of groups in the analysis.
  *   - group_indices: arma::imat specifying group-wise start and end indices for individuals.
- *   - interaction_scale: Scale parameter for pairwise interaction priors.
- *   - pairwise_difference_scale: Scale parameter for pairwise difference priors.
+ *   - interaction_scale_matrix: Scale parameter for pairwise interaction priors.
+ *   - pairwise_difference_scale_matrix: Scale parameter for pairwise difference priors.
  *   - main_difference_scale: Scale parameter for main difference priors.
  *   - pairwise_difference_prior: Type of prior for pairwise differences (e.g., "Beta-Bernoulli").
  *   - main_difference_prior: Type of prior for main differences (e.g., "Beta-Bernoulli").
@@ -2885,8 +2885,8 @@ List compare_anova_gibbs_sampler(
     const arma::imat& num_categories,
     const int num_groups,
     const arma::imat& group_indices,
-    const double interaction_scale,
-    const double pairwise_difference_scale,
+    const arma::mat& interaction_scale_matrix,
+    const arma::mat& pairwise_difference_scale_matrix,
     const double main_difference_scale,
     const String& pairwise_difference_prior,
     const String& main_difference_prior,
@@ -3036,8 +3036,8 @@ List compare_anova_gibbs_sampler(
       num_persons, num_groups, group_indices, num_obs_categories, sufficient_blume_capel,
       residual_matrix, independent_thresholds, is_ordinal_variable,
       baseline_category, inclusion_indicator, inclusion_probability_difference,
-      proposal_sd_main_effects, proposal_sd_pairwise_effects, interaction_scale,
-      main_difference_scale, pairwise_difference_scale, prior_threshold_alpha,
+      proposal_sd_main_effects, proposal_sd_pairwise_effects, interaction_scale_matrix,
+      main_difference_scale, pairwise_difference_scale_matrix, prior_threshold_alpha,
       prior_threshold_beta, rm_adaptation_rate, target_acceptance_rate,
       iteration, rm_lower_bound, rm_upper_bound, difference_selection,
       num_pairwise, num_variables, index);

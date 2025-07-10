@@ -27,7 +27,8 @@ bgm(
   save_pairwise = FALSE,
   save_indicator = FALSE,
   display_progress = TRUE,
-  update_method = c("adaptive-metropolis", "adaptive-mala", "fisher-mala")
+  update_method = c("adaptive-metropolis", "adaptive-mala", "fisher-mala"),
+  standardize_interactions = FALSE
 )
 }
 \arguments{
@@ -164,6 +165,20 @@ and interaction parameters:
   \item{"fisher-mala"}{Uses Fisher-preconditioned MALA for both thresholds and interactions.}
 }
 Defaults to \code{"adaptive-metropolis"}.}
+
+\item{standardize_interactions}{Logical. If \code{TRUE}, standardizes the scale
+of all pairwise interaction effects to improve comparability across variables
+with different response ranges. In the regular ordinal model, interaction terms
+are products of category values, which grow with the number of response categories
+and lead to smaller effect estimates and greater prior shrinkage. In the Blume-Capel
+model, interaction terms involve products of distances to the reference category,
+and the scale similarly increases with the distance from the reference category.
+This standardization adjusts for such differences by modifying the prior scale
+for each interaction effect: the Cauchy prior scale is multiplied by the product of
+the maximum observed values (or the maximal distance from the reference, for
+Blume-Capel variables) of the corresponding variables. Interaction estimates
+are rescaled accordingly after sampling. This does not affect thresholds or
+imputation. Defaults to \code{FALSE}.}
 }
 \value{
 If \code{save = FALSE} (the default), the result is a list of class
@@ -182,15 +197,17 @@ models the offset to the reference category.
 elements are returned:
   \itemize{
     \item A vector \code{allocations} with the estimated cluster assignments
-    of the nodes, calculated using a method proposed by \insertCite{@Dahl2009}{bgms} and
-    also used by \insertCite{@GengEtAl_2019}{bgms}.
+    of the nodes, calculated using a method proposed by
+    \insertCite{@Dahl2009}{bgms} and also used by
+    \insertCite{@GengEtAl_2019}{bgms}.
     \item A matrix \code{components} with the estimated posterior probability
-    of the number of components (clusters) in the network. These probabilities
-    are calculated based on Equation 3.7 in \insertCite{@miller2018mixture}{bgms}, which computes
-    the conditional probability of the number of components given the
-    number of clusters. The number of clusters is derived from the
-    cardinality of the sampled \code{allocations} vector for each iteration of
-    the MCMC sampler (see \code{save = TRUE}).
+    of the number of components (clusters) in the network. These
+    probabilities are calculated based on Equation 3.7 in
+    \insertCite{@miller2018mixture}{bgms}, which computes the conditional
+    probability of the number of components given the number of clusters. The
+    number of clusters is derived from the cardinality of the sampled
+    \code{allocations} vector for each iteration of the MCMC sampler (see
+    \code{save = TRUE}).
   }
 }
 If \code{save = TRUE}, the result is a list of class ``bgms'' containing:

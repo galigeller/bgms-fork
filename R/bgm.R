@@ -160,17 +160,19 @@
 #'   \item{"fisher-mala"}{Uses Fisher-preconditioned MALA for both thresholds and interactions.}
 #' }
 #' Defaults to \code{"adaptive-metropolis"}.
-#' @param standardize_interactions Logical. If \code{TRUE}, standardizes the
-#' scale of all pairwise interaction effects by adjusting the prior distribution
-#' and rescaling the output. This ensures that interaction estimates correspond
-#' to inputs that lie in the interval \eqn{[0, 1]}. Internally, this is achieved
-#' via a change of variables: no modification is made to the input data, and
-#' threshold parameters remain unaffected. The Cauchy prior scale for each
-#' interaction is multiplied by the product of the maximum observed values
-#' (i.e., the number of categories) for the corresponding variables. After
-#' sampling, the interaction estimates are rescaled back to match the
-#' standardized interpretation. This approach improves interpretability when
-#' variables have different category ranges. Defaults to \code{FALSE}.
+#' @param standardize_interactions Logical. If \code{TRUE}, standardizes the scale
+#' of all pairwise interaction effects to improve comparability across variables
+#' with different response ranges. In the regular ordinal model, interaction terms
+#' are products of category values, which grow with the number of response categories
+#' and lead to smaller effect estimates and greater prior shrinkage. In the Blume-Capel
+#' model, interaction terms involve products of distances to the reference category,
+#' and the scale similarly increases with the distance from the reference category.
+#' This standardization adjusts for such differences by modifying the prior scale
+#' for each interaction effect: the Cauchy prior scale is multiplied by the product of
+#' the maximum observed values (or the maximal distance from the reference, for
+#' Blume-Capel variables) of the corresponding variables. Interaction estimates
+#' are rescaled accordingly after sampling. This does not affect thresholds or
+#' imputation. Defaults to \code{FALSE}.
 #'
 #' @return If \code{save = FALSE} (the default), the result is a list of class
 #' ``bgms'' containing the following matrices with model-averaged quantities:
@@ -364,7 +366,7 @@ bgm = function(x,
   # Check standardization option
   standardize_interactions = as.logical(standardize_interactions)
   if (is.na(standardize_interactions)) {
-    stop("standardize_interactions must be TRUE or FALSE.")
+    stop("`standardize_interactions` must be TRUE or FALSE.")
   }
 
   #Check data input ------------------------------------------------------------
@@ -496,15 +498,25 @@ bgm = function(x,
 
   # Compute the interaction scale matrix ----------------------------------------
   if (standardize_interactions) {
+    max_vals = num_categories
+    if(any(!variable_bool)) {
+      # For Blume-Capel variables, the maximum value is the maximum observed
+      # distance to the reference category.
+      i = which(!variable_bool)
+      max_vals[i] = sapply(i, function(variable) {
+        max(abs(x[, variable] - reference_category[variable]))
+      })
+    }
+
     # Use num_categories as proxy for max_vals
-    interaction_scale_matrix <- outer(num_categories, num_categories, function(a, b) {
+    interaction_scale_matrix <- outer(max_vals, max_vals, function(a, b) {
       interaction_scale * a * b
     })
   } else {
     # Use scalar interaction_scale repeated over matrix
     interaction_scale_matrix <- matrix(interaction_scale,
-                                       nrow = length(num_categories),
-                                       ncol = length(num_categories))
+                                       nrow = length(num_variables),
+                                       ncol = length(num_variables))
   }
 
   # Call the Rcpp function

@@ -32,7 +32,8 @@ bgmCompare(
   save_main = FALSE,
   save_pairwise = FALSE,
   save_indicator = FALSE,
-  display_progress = TRUE
+  display_progress = TRUE,
+  standardize_interactions = FALSE
 )
 }
 \arguments{
@@ -77,6 +78,20 @@ bgmCompare(
 \item{save_main, save_pairwise, save_indicator}{Logical. Enable saving sampled states for `main_effects`, `pairwise_effects`, and `indicator`, respectively. Default: `FALSE`.}
 
 \item{display_progress}{Logical. Show progress bar during computation. Default: `TRUE`.}
+
+\item{standardize_interactions}{Logical. If \code{TRUE}, standardizes the scale
+of all pairwise interaction effects to improve comparability across variables
+with different response ranges. In the regular ordinal model, interaction terms
+are products of category values, which grow with the number of response categories
+and lead to smaller effect estimates and greater prior shrinkage. In the Blume-Capel
+model, interaction terms involve products of distances to the reference category,
+and the scale similarly increases with the distance from the reference category.
+This standardization adjusts for such differences by modifying the prior scale
+for each interaction effect and the corresponding group differences: the Cauchy
+prior scale is multiplied by the product of the maximum observed values (or the
+maximal distance from the reference, for Blume-Capel variables) of the corresponding
+variables. Interaction estimates are rescaled accordingly after sampling. This
+does not affect thresholds or imputation. Default: \code{FALSE}.}
 }
 \value{
 A list containing the posterior means and, optionally, sampled states based on the `save_*` options. The returned components include:

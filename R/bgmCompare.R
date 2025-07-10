@@ -61,6 +61,19 @@
 #' @param pairwise_beta_bernoulli_alpha,pairwise_beta_bernoulli_beta Double. Shape parameters for the Beta-Bernoulli prior on pairwise differences.
 #' @param save Logical. If true, sampled states for all parameters are returned. Deprecated.
 #' @param save_main,save_pairwise,save_indicator Logical. Enable saving sampled states for `main_effects`, `pairwise_effects`, and `indicator`, respectively. Default: `FALSE`.
+#' @param standardize_interactions Logical. If \code{TRUE}, standardizes the scale
+#' of all pairwise interaction effects to improve comparability across variables
+#' with different response ranges. In the regular ordinal model, interaction terms
+#' are products of category values, which grow with the number of response categories
+#' and lead to smaller effect estimates and greater prior shrinkage. In the Blume-Capel
+#' model, interaction terms involve products of distances to the reference category,
+#' and the scale similarly increases with the distance from the reference category.
+#' This standardization adjusts for such differences by modifying the prior scale
+#' for each interaction effect and the corresponding group differences: the Cauchy
+#' prior scale is multiplied by the product of the maximum observed values (or the
+#' maximal distance from the reference, for Blume-Capel variables) of the corresponding
+#' variables. Interaction estimates are rescaled accordingly after sampling. This
+#' does not affect thresholds or imputation. Default: \code{FALSE}.
 #'
 #' @return A list containing the posterior means and, optionally, sampled states based on the `save_*` options. The returned components include:
 #' - `posterior_mean_main`, `posterior_mean_pairwise`, and `posterior_mean_indicator` for posterior means.
@@ -104,7 +117,8 @@ bgmCompare = function(x,
                       save_main = FALSE,
                       save_pairwise = FALSE,
                       save_indicator = FALSE,
-                      display_progress = TRUE) {
+                      display_progress = TRUE,
+                      standardize_interactions = FALSE) {
 
   # Deprecation warning for save parameter
   if(hasArg(save)) {
@@ -112,6 +126,12 @@ bgmCompare = function(x,
     save_main = save_main || save
     save_pairwise = save_pairwise || save
     save_indicator = save_indicator || save
+  }
+
+  # Check standardization option
+  standardize_interactions = as.logical(standardize_interactions)
+  if (is.na(standardize_interactions)) {
+    stop("`standardize_interactions` must be TRUE or FALSE.")
   }
 
   # Check and preprocess data
@@ -266,13 +286,45 @@ bgmCompare = function(x,
     projection = matrix(projection, ncol = 1) / sqrt(2)
   }
 
+  # Compute the interaction scale matrix ----------------------------------------
+  if (standardize_interactions) {
+    max_vals = num_categories
+    if(any(!variable_bool)) {
+      # For Blume-Capel variables, the maximum value is the maximum observed
+      # distance to the reference category.
+      i = which(!variable_bool)
+      max_vals[i] = sapply(i, function(variable) {
+        max(abs(x[, variable] - reference_category[variable]))
+      })
+    }
+
+    # Use num_categories as proxy for max_vals
+    interaction_scale_matrix <- outer(max_vals, max_vals, function(a, b) {
+      interaction_scale * a * b
+    })
+    pairwise_difference_scale_matrix <- outer(max_vals, max_vals, function(a, b) {
+      pairwise_difference_scale * a * b
+    })
+
+  } else {
+    # Use scalar interaction_scale repeated over matrix
+    interaction_scale_matrix <- matrix(interaction_scale,
+                                       nrow = length(num_variables),
+                                       ncol = length(num_variables))
+    # Use scalar interaction_scale repeated over matrix
+    pairwise_difference_scale_matrix <- matrix(pairwise_difference_scale,
+                                               nrow = length(num_variables),
+                                               ncol = length(num_variables))
+  }
+
+
   # Call the Rcpp function
   out = compare_anova_gibbs_sampler(
     observations = observations, main_effect_indices = main_effect_indices,
     pairwise_effect_indices = pairwise_effect_indices, projection = projection,
     num_categories = num_categories, num_groups = num_groups,
-    group_indices = group_indices, interaction_scale = interaction_scale,
-    pairwise_difference_scale = pairwise_difference_scale,
+    group_indices = group_indices, interaction_scale_matrix = interaction_scale_matrix,
+    pairwise_difference_scale_matrix = pairwise_difference_scale_matrix,
     main_difference_scale = main_difference_scale,
     pairwise_difference_prior = model$pairwise_difference_prior,
     main_difference_prior = model$main_difference_prior,
@@ -318,7 +370,7 @@ bgmCompare = function(x,
     main_difference_scale = main_difference_scale,
     pairwise_difference_scale = pairwise_difference_scale,
     projection,
-    is_ordinal_variable = ordinal_variable
+    is_ordinal_variable = ordinal_variable, standardize_interactions = standardize_interactions
   )
 
   return(output)

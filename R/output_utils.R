@@ -169,7 +169,7 @@ prepare_output_bgmCompare = function(out, x, independent_thresholds,
     main_beta_bernoulli_alpha = main_beta_bernoulli_alpha,
     main_beta_bernoulli_beta = main_beta_bernoulli_beta,
     main_difference_scale = main_difference_scale,
-    pairwise_difference_scale = pairwise_difference_scale,
+    pairwise_difference_scale = pairwise_difference_scale, standardize_interactions = standardize_interactions,
     version = packageVersion("bgms")
   )
 
