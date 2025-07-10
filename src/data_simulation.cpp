@@ -107,6 +107,7 @@ IntegerMatrix sample_bcomrf_gibbs(int no_states,
       while (u > probabilities[score]) {
         score++;
       }
+
       observations(person, variable) = score;
     }
   }
@@ -114,24 +115,31 @@ IntegerMatrix sample_bcomrf_gibbs(int no_states,
   //The Gibbs sampler ----------------------------------------------------------
   for(int iteration = 0; iteration < iter; iteration++) {
     for(int variable = 0; variable < no_variables; variable++) {
+
       for(int person =  0; person < no_states; person++) {
         rest_score = 0.0;
         for(int vertex = 0; vertex < no_variables; vertex++) {
-          rest_score += observations(person, vertex) *
-            interactions(vertex, variable);
+          if(variable_type[vertex] == "blume-capel") {
+            int ref = reference_category[vertex];
+            rest_score += (observations(person, vertex) - ref) *
+              interactions(vertex, variable);
+          } else {
+            rest_score += observations(person, vertex) *
+              interactions(vertex, variable);
+          }
         }
 
         if(variable_type[variable] == "blume-capel") {
           cumsum = 0.0;
+          int ref = reference_category[variable];
           for(int category = 0; category < no_categories[variable] + 1; category++) {
+            int centered = category - ref;
             //The linear term of the Blume-Capel variable
-            exponent = thresholds(variable, 0) * category;
+            exponent = thresholds(variable, 0) * centered;
             //The quadratic term of the Blume-Capel variable
-            exponent += thresholds(variable, 1) *
-              (category - reference_category[variable]) *
-              (category - reference_category[variable]);
+            exponent += thresholds(variable, 1) * centered * centered;
             //The pairwise interactions
-            exponent += category * rest_score;
+            exponent += centered * rest_score;
             cumsum += std::exp(exponent);
             probabilities[category] = cumsum;
           }
