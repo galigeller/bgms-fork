@@ -298,9 +298,9 @@ void impute_missing_values_for_graphical_model (
         const int score = cat + 1;
         const int centered = score - ref;
         const double exponent =
-          main_effects (variable, 0) * score +
+          main_effects (variable, 0) * centered +
           main_effects (variable, 1) * centered * centered +
-          score * rest_score;
+          centered * rest_score;
         cumsum += std::exp (exponent);
         category_probabilities[score] = cumsum;
       }
@@ -332,10 +332,12 @@ void impute_missing_values_for_graphical_model (
 
         sufficient_blume_capel(0, variable) += delta;
         sufficient_blume_capel(1, variable) += delta_sq;
+        //For Blume-Capel variables there is no need to update the centered score in the observations matrix when the pairwise_effect is constant
       }
 
       // Update residuals across all variables
       for (int var = 0; var < num_variables; var++) {
+        //For Blume-Capel variables there is no need to update the centered score when the pairwise_effect is constant
         const double delta_score = (new_value - old_value) * pairwise_effects(var, variable);
         residual_matrix(person, var) += delta_score;
       }
@@ -425,7 +427,7 @@ double log_pseudoposterior_thresholds (
 
       // Vectorized likelihood contribution
       // For each person, we compute the unnormalized log-likelihood denominator:
-      //   denom = sum_c exp (θ_lin * c + θ_quad * (c - ref)^2 + c * rest_score - bound)
+      //   denom = sum_c exp (θ_lin * (c-ref) + θ_quad * (c - ref)^2 + (c-ref) * rest_score - bound)
       // Where:
       //   - θ_lin, θ_quad are linear and quadratic thresholds
       //   - ref is the reference category (used for centering)
@@ -436,9 +438,9 @@ double log_pseudoposterior_thresholds (
       for (int cat = 0; cat <= num_cats; cat++) {
         int centered = cat - ref;                                               // centered category
         double quad_term = quadratic_threshold * centered * centered;                    // precompute quadratic term
-        double lin_term = linear_threshold * cat;                                      // precompute linear term
+        double lin_term = linear_threshold * centered;                                      // precompute linear term
 
-        arma::vec exponent = lin_term + quad_term + cat * rest_score - bound;
+        arma::vec exponent = lin_term + quad_term + centered * rest_score - bound;
         denom += arma::exp (exponent);                                           // accumulate over categories
       }
 
@@ -545,29 +547,32 @@ arma::vec gradient_log_pseudoposterior_thresholds (
       // Vectorized computation of expected statistics
       //
       // For each person, compute the expected sufficient statistics:
-      //   - sum_lin  = E[score]
+      //   - sum_lin  = E[score-ref]
       //   - sum_quad = E[(score - ref)^2]
       // where probabilities are softmax-like terms derived from θ_lin and θ_quad.
       //
       // This replaces the nested loop with vectorized accumulation over categories.
       arma::vec rest_score = residual_matrix.col(variable);                     // Residuals per person
-      arma::vec bound = num_cats * rest_score;                                  // Stabilization bound
-      arma::vec denom = arma::exp (quadratic_threshold * ref * ref - bound);              // Initial term at score = 0
+      arma::vec bound = -ref * rest_score;                                      // Stabilization bound
+      if(rest_score > 0.0) {
+        bound += num_cats * rest_score;                                         // Stabilization bound
+      }
+      arma::vec denom = arma::exp (-ref * linear_threshold + quadratic_threshold * ref * ref - bound);    // Initial term at score = 0
 
-      arma::vec sum_lin(num_persons, arma::fill::zeros);                        // E[score]
+      arma::vec sum_lin = - ref * denom;                                        // E[score - ref]
       arma::vec sum_quad = ref * ref * denom;                                   // E[(score - ref)^2], starts at score = 0
 
       for (int cat = 0; cat < num_cats; cat++) {
         int score = cat + 1;
         int centered = score - ref;
 
-        double lin_term = linear_threshold * score;
+        double lin_term = linear_threshold * centered;
         double quad_term = quadratic_threshold * centered * centered;
 
-        arma::vec exponent = lin_term + quad_term + score * rest_score - bound;
-        arma::vec weight = arma::exp (exponent);                                 // Unnormalized probabilities
+        arma::vec exponent = lin_term + quad_term + centered * rest_score - bound;
+        arma::vec weight = arma::exp (exponent);                                // Unnormalized probabilities
 
-        sum_lin += weight * score;                                              // Accumulate score-weighted terms
+        sum_lin += weight * centered;                                              // Accumulate score-weighted terms
         sum_quad += weight * centered * centered;                               // Accumulate centered^2-weighted terms
         denom += weight;                                                        // Update normalization constant
       }
@@ -1100,11 +1105,11 @@ void update_blumecapel_thresholds_with_adaptive_metropolis (
       if (param == 0) {
         // Linear update
         double quad = main_effects(variable, 1) * centered * centered;
-        numer_current(cat) = current * cat + quad;
-        numer_proposed(cat) = proposed * cat + quad;
+        numer_current(cat) = current * centered + quad;
+        numer_proposed(cat) = proposed * centered + quad;
       } else {
         // Quadratic update
-        double lin = main_effects(variable, 0) * cat;
+        double lin = main_effects(variable, 0) * centered;
         numer_current(cat) = current * centered * centered + lin;
         numer_proposed(cat) = proposed * centered * centered + lin;
       }
@@ -1129,13 +1134,13 @@ void update_blumecapel_thresholds_with_adaptive_metropolis (
     //
     // The bound stabilizes exponentials across categories and persons.
     arma::vec rest_score = residual_matrix.col(variable);                       // Person-wise residuals
-    arma::vec bound = arma::max(rest_score, arma::zeros<arma::vec>(num_persons)) * num_cats + lbound;
+    arma::vec bound = arma::max(rest_score, arma::zeros<arma::vec>(num_persons)) * (num_cats - ref) + lbound;
 
     arma::vec denom_curr = arma::exp (numer_current(0) - bound);                 // Score = 0 contribution
     arma::vec denom_prop = arma::exp (numer_proposed(0) - bound);
 
     for (int cat = 0; cat < num_cats; cat++) {
-      arma::vec score_term = (cat + 1) * rest_score - bound;
+      arma::vec score_term = (cat + 1 - ref) * rest_score - bound;
 
       // Compute exponentials for each category and add to denominator
       denom_curr += arma::exp (numer_current(cat + 1) + score_term);
@@ -1211,7 +1216,7 @@ arma::vec gradient_log_pseudoposterior_interactions (
     int num_cats = num_categories (var);
     arma::mat score_weights (num_observations, num_cats, arma::fill::zeros);    //First column would be zero
 
-    arma::vec rest_scores = observations * pairwise_effects.col (var);
+    arma::vec rest_scores = observations * pairwise_effects.col (var); //For Blume-Capel, observations are already recoded as x-ref in the R wrapper
     arma::vec denominator = arma::zeros (num_observations);
     arma::vec bounds = arma::max (rest_scores, arma::zeros<arma::vec> (num_observations)) * num_cats;
 
@@ -1224,19 +1229,17 @@ arma::vec gradient_log_pseudoposterior_interactions (
         score_weights.col(category) = (category + 1) * weight;
       }
     } else {
-      const int ref_cat = reference_category (var);
-      // Zero category
-      double quad_term = main_effects (var, 1) * ref_cat * ref_cat;
-      arma::vec exponent = quad_term - bounds;
-      denominator = arma::exp (exponent);
-      for (int category = 1; category <= num_cats; category++) {
-        int centered_cat = category - ref_cat;
-        double lin_term = main_effects (var, 0) * category;
-        double quad_term = main_effects (var, 1) * centered_cat * centered_cat;
-        arma::vec exponent = lin_term + quad_term + category * rest_scores - bounds;
+      const int ref = reference_category (var);
+      bounds -= ref * bounds;  // Adjust bounds for Blume-Capel variables
+
+      for (int cat = 0; cat <= num_cats; cat++) {
+        int centered = cat - ref;
+        double lin_term = main_effects (var, 0) * centered;
+        double quad_term = main_effects (var, 1) * centered * centered;
+        arma::vec exponent = lin_term + quad_term + centered * rest_scores - bounds;
         arma::vec weight = arma::exp (exponent);
         denominator += weight;
-        score_weights.col(category - 1) = category * weight;
+        score_weights.col(category - 1) = centered * weight;
       }
     }
     score_weights.each_col() /= denominator;
@@ -1249,7 +1252,7 @@ arma::vec gradient_log_pseudoposterior_interactions (
       if(var == var2)
         continue;
 
-      arma::ivec xv = observations.col(var2);
+      arma::ivec xv = observations.col(var2); // For Blume-Capel variables, this is already recoded to x-ref
 
       for (int category = 0; category < num_cats; category++) {
         expected_value += score_weights.col(category) % xv;
@@ -1314,6 +1317,7 @@ double gradient_log_pseudoposterior_interaction_single (
   const int num_persons = observations.n_rows;
 
   // Extract observed score vectors for each variable
+  // For Blume-Capel variables, these are already recoded to x - ref
   arma::ivec x_var1 = observations.col (var1);
   arma::ivec x_var2 = observations.col (var2);
 
@@ -1336,15 +1340,15 @@ double gradient_log_pseudoposterior_interaction_single (
       numerator_var1 += (category + 1) * x_var2 % weight;
     }
   } else {
-    const int ref_cat = reference_category (var1);
-    for (int category = 0; category <= num_categories_var1; category++) {
-      int centered = category - ref_cat;
-      double lin_term = main_effects (var1, 0) * category;
+    const int ref = reference_category (var1);
+    for (int cat = 0; cat <= num_categories_var1; cat++) {
+      int centered = cat - ref;
+      double lin_term = main_effects (var1, 0) * centered;
       double quad_term = main_effects (var1, 1) * centered * centered;
-      arma::vec exponent = lin_term + quad_term + category * rest_scores_var1 - bounds_var1;
+      arma::vec exponent = lin_term + quad_term + centered * rest_scores_var1 - bounds_var1;
       arma::vec weight = arma::exp (exponent);
       denominator_var1 += weight;
-      numerator_var1 += category * x_var2 % weight;
+      numerator_var1 += centered * x_var2 % weight;
     }
   }
 
@@ -1366,15 +1370,15 @@ double gradient_log_pseudoposterior_interaction_single (
       numerator_var2 += (category + 1) * x_var1 % weight;
     }
   } else {
-    const int ref_cat = reference_category (var2);
-    for (int category = 0; category <= num_categories_var2; category++) {
-      int centered = category - ref_cat;
-      double lin_term = main_effects (var2, 0) * category;
+    const int ref = reference_category (var2);
+    for (int cat = 0; cat <= num_categories_var2; cat++) {
+      int centered = cat - ref;
+      double lin_term = main_effects (var2, 0) * centered;
       double quad_term = main_effects (var2, 1) * centered * centered;
-      arma::vec exponent = lin_term + quad_term + category * rest_scores_var2 - bounds_var2;
+      arma::vec exponent = lin_term + quad_term + centered * rest_scores_var2 - bounds_var2;
       arma::vec weight = arma::exp (exponent);
       denominator_var2 += weight;
-      numerator_var2 += category * x_var1 % weight;
+      numerator_var2 += centered * x_var1 % weight;
     }
   }
 
@@ -1447,12 +1451,12 @@ double log_pseudoposterior_interactions (
       }
     } else {
       // Binary/categorical variable: quadratic + linear term
-      const int ref_cat = reference_category (var);
-      for (int category = 0; category <= num_categories_var; category++) {
-        int centered_cat = category - ref_cat;
-        double lin_term = main_effects (var, 0) * category;
-        double quad_term = main_effects (var, 1) * centered_cat * centered_cat;
-        arma::vec exponent = lin_term + quad_term + category * rest_scores - bounds;
+      const int ref = reference_category (var);
+      for (int cat = 0; cat <= num_categories_var; cat++) {
+        int centered = cat - ref;
+        double lin_term = main_effects (var, 0) * centered;
+        double quad_term = main_effects (var, 1) * centered * centered;
+        arma::vec exponent = lin_term + quad_term + centered * rest_scores - bounds;
         denominator += arma::exp (exponent);
       }
     }
@@ -1473,9 +1477,6 @@ double log_pseudoposterior_interactions (
 
   return log_pseudo_posterior;
 }
-
-
-
 
 
 
@@ -1751,6 +1752,7 @@ void update_interactions_with_mala (
           double delta = proposal (interaction_index) - pairwise_effects (var1, var2);
           pairwise_effects (var1, var2) = proposal (interaction_index);
           pairwise_effects (var2, var1) = proposal (interaction_index);
+          // For Blume-Capel variables, observations are already recoded to x - ref
           residual_matrix.col (var1) += arma::conv_to<arma::vec>::from (observations.col (var2)) * delta;
           residual_matrix.col (var2) += arma::conv_to<arma::vec>::from (observations.col (var1)) * delta;
         }
@@ -1809,6 +1811,9 @@ double compute_log_likelihood_ratio_for_variable (
 
   // Stability bound for softmax (scaled by number of categories)
   arma::vec bounds = arma::max (rest_scores, arma::zeros<arma::vec> (num_persons)) * num_categories_var;
+  if(!is_ordinal_variable (variable)) {
+    bounds -= bounds * reference_category (variable);  // Adjust bounds for ordinal variables
+  }
 
   arma::vec denom_current = arma::zeros (num_persons);
   arma::vec denom_proposed = arma::zeros (num_persons);
@@ -1826,13 +1831,13 @@ double compute_log_likelihood_ratio_for_variable (
 
   } else {
     // Binary or categorical variable: linear + quadratic score
-    const int ref_cat = reference_category (variable);
+    const int ref = reference_category (variable);
 
-    for (int category = 0; category <= num_categories_var; category++) {
-      int centered = category - ref_cat;
-      double lin_term = main_effects (variable, 0) * category;
+    for (int cat = 0; cat <= num_categories_var; cat++) {
+      int centered = cat - ref;
+      double lin_term = main_effects (variable, 0) * centered;
       double quad_term = main_effects (variable, 1) * centered * centered;
-      arma::vec exponent = lin_term + quad_term + category * rest_scores - bounds;
+      arma::vec exponent = lin_term + quad_term + centered * rest_scores - bounds;
 
       denom_current += arma::exp (exponent + category * interaction * current_state);
       denom_proposed += arma::exp (exponent + category * interaction * proposed_state);
