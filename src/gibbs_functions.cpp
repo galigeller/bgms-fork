@@ -553,11 +553,8 @@ arma::vec gradient_log_pseudoposterior_thresholds (
       //
       // This replaces the nested loop with vectorized accumulation over categories.
       arma::vec rest_score = residual_matrix.col(variable);                     // Residuals per person
-      arma::vec bound = -ref * rest_score;                                      // Stabilization bound
-      if(rest_score > 0.0) {
-        bound += num_cats * rest_score;                                         // Stabilization bound
-      }
-      arma::vec denom = arma::exp (-ref * linear_threshold + quadratic_threshold * ref * ref - bound);    // Initial term at score = 0
+      arma::vec bound = arma::max(rest_score, arma::zeros<arma::vec>(num_persons)) * (num_cats - ref); // Stabilization bound                                      // Stabilization bound
+      arma::vec denom = arma::exp (-ref * linear_threshold + quadratic_threshold * ref * ref - bound); // Initial term at score = 0
 
       arma::vec sum_lin = - ref * denom;                                        // E[score - ref]
       arma::vec sum_quad = ref * ref * denom;                                   // E[(score - ref)^2], starts at score = 0
@@ -1239,7 +1236,7 @@ arma::vec gradient_log_pseudoposterior_interactions (
         arma::vec exponent = lin_term + quad_term + centered * rest_scores - bounds;
         arma::vec weight = arma::exp (exponent);
         denominator += weight;
-        score_weights.col(category - 1) = centered * weight;
+        score_weights.col(cat - 1) = centered * weight;
       }
     }
     score_weights.each_col() /= denominator;
@@ -1839,8 +1836,8 @@ double compute_log_likelihood_ratio_for_variable (
       double quad_term = main_effects (variable, 1) * centered * centered;
       arma::vec exponent = lin_term + quad_term + centered * rest_scores - bounds;
 
-      denom_current += arma::exp (exponent + category * interaction * current_state);
-      denom_proposed += arma::exp (exponent + category * interaction * proposed_state);
+      denom_current += arma::exp (exponent + centered * interaction * current_state);
+      denom_proposed += arma::exp (exponent + centered * interaction * proposed_state);
     }
   }
 
