@@ -418,7 +418,7 @@ bgm = function(
     } else if(update_method == "hamiltonian-mc") {
       target_accept = 0.65
     } else if(update_method == "nuts") {
-      target_accept = 0.60
+      target_accept = 0.80
     }
   }
 

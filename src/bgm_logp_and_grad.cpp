@@ -554,6 +554,21 @@ double log_pseudoposterior (
       const double lin_effect = main_effects(variable, 0);
       const double quad_effect = main_effects(variable, 1);
 
+      // ----
+      const int score_min = -ref;
+      const int score_max = num_cats - ref;
+      const int max_diff = (std::abs(score_min) >= std::abs(score_max)) ? score_min : score_max;
+      bound = max_diff * residual_score;                              // numerical bound vector
+
+      double main_bound = lin_effect * score_min + quad_effect * score_min * score_min;
+      for (int cat = 1; cat <= num_cats; cat++) {
+        const int score = cat - ref;
+        const double tmp = lin_effect * score + quad_effect * score * score;
+        if (std::abs(tmp) > std::abs(main_bound)) main_bound = tmp;
+      }
+      bound += main_bound;  // final bound adjustment
+      // ----
+
       for (int cat = 0; cat <= num_cats; cat++) {
         int score = cat - ref;                                                  // centered category
         double lin = lin_effect * score;                                        // precompute linear term
@@ -683,9 +698,9 @@ arma::vec gradient_log_pseudoposterior(
   for (int variable = 0; variable < num_variables; variable++) {
     const int num_cats = num_categories(variable);
     arma::vec residual_score = residual_matrix.col(variable);
-    arma::vec bound = num_cats * residual_score;
 
     if (is_ordinal_variable(variable)) {
+      arma::vec bound = num_cats * residual_score;
       arma::vec main_param = main_effects.row(variable).cols(0, num_cats - 1).t();
       arma::mat probs = compute_probs(
         main_param, residual_score, bound, num_cats
@@ -708,22 +723,69 @@ arma::vec gradient_log_pseudoposterior(
       }
       offset += num_cats;
     } else {
+
       const int ref = baseline_category(variable);
       const double lin_eff = main_effects(variable, 0);
       const double quad_eff = main_effects(variable, 1);
 
-      arma::mat exponents(num_persons, num_cats + 1);
-      for (int cat = 0; cat <= num_cats; cat++) {
-        int score = cat - ref;
-        double lin  = lin_eff * score;
-        double quad = quad_eff * score * score;
-        exponents.col(cat) = lin + quad + score * residual_score - bound;
+      // Compute bounds
+      const int score_min = -ref;
+      const int score_max = num_cats - ref;
+      const int max_diff  = (std::abs(score_min) >= std::abs(score_max)) ? score_min : score_max;
+      arma::vec bound = max_diff * residual_score;
+
+      double main_bound = lin_eff * score_min + quad_eff * score_min * score_min;
+      for (int cat = 1; cat <= num_cats; cat++) {
+        const int score = cat - ref;
+        const double tmp = lin_eff * score + quad_eff * score * score;
+        if (std::abs(tmp) > std::abs(main_bound)) main_bound = tmp;
       }
+      bound += main_bound;
+
+      // arma::mat exponents(num_persons, num_cats + 1);
+      // for (int cat = 0; cat <= num_cats; cat++) {
+      //   int score = cat - ref;
+      //   double lin  = lin_eff * score;
+      //   double quad = quad_eff * score * score;
+      //   exponents.col(cat) = lin + quad + score * residual_score - bound;
+      // }
+      // arma::mat probs = ARMA_MY_EXP(exponents);
+      // arma::vec denom = arma::sum(probs, 1);
+      // probs.each_col() /= denom;
+
+      // arma::ivec lin_score = arma::regspace<arma::ivec>(0 - ref, num_cats - ref);
+      // arma::ivec quad_score = arma::square(lin_score);
+
+      // Compute exponents
+      arma::vec scores = arma::regspace<arma::vec>(0 - ref, num_cats - ref);
+      arma::rowvec offsets = lin_eff * scores.t() + quad_eff * arma::square(scores.t());
+      arma::mat exponents = residual_score * scores.t();
+      exponents.each_row() += offsets;
+      exponents.each_col() -= bound;
+      arma::vec row_max = arma::max(exponents, /*dim=*/1);
+      exponents.each_col() -= row_max;
+
+      // Compute probabilities
       arma::mat probs = ARMA_MY_EXP(exponents);
       arma::vec denom = arma::sum(probs, 1);
+        // Guard against zeros/NaNs in denom (can happen if all entries underflow to 0)
+      arma::uvec bad = arma::find_nonfinite(denom);
+      bad = arma::join_vert(bad, arma::find(denom <= 0));
+      bad = arma::unique(bad);
+      if (!bad.is_empty()) {
+        // Fallback: make the max-exponent entry 1 and others 0 for those rows
+        // (softmax limit)
+        arma::uvec idx_max = arma::index_max(exponents.rows(bad), 1);
+        probs.rows(bad).zeros();
+        for (arma::uword i = 0; i < bad.n_elem; ++i) {
+          probs(bad(i), idx_max(i)) = 1.0;
+        }
+        // fix denom to 1 for those rows so the division below is safe
+        denom.elem(bad).ones();
+      }
       probs.each_col() /= denom;
 
-      arma::ivec lin_score = arma::regspace<arma::ivec>(0 - ref, num_cats - ref);
+      arma::ivec lin_score = arma::conv_to<arma::ivec>::from(scores);
       arma::ivec quad_score = arma::square(lin_score);
 
       // main effects
@@ -772,7 +834,6 @@ arma::vec gradient_log_pseudoposterior(
       gradient(location) -= 2.0 * effect / (effect * effect + pairwise_scale * pairwise_scale);
     }
   }
-
   return gradient;
 }
 
