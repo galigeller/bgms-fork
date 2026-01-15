@@ -21,10 +21,10 @@ test_that("bgms functions satisfy user-visible return contract", {
   # If these fail, downstream user code is likely to break even if the sampler
   # "runs".
   # ---------------------------------------------------------------------------
-  
+
   # Make test reproducible and keep runtime reasonable.
   set.seed(123)
-  
+
   # Use a small fixed subset of an included dataset so:
   #   - tests run quickly,
   #   - dimensional expectations are deterministic,
@@ -32,7 +32,7 @@ test_that("bgms functions satisfy user-visible return contract", {
   data("Wenchuan", package = "bgms")
   dat <- na.omit(Wenchuan)[1:40, 1:5]
   p   <- ncol(dat)  # expected dimension for pairwise matrices
-  
+
   # ---------------------------------------------------------------------------
   # Test specifications
   # ---------------------------------------------------------------------------
@@ -102,15 +102,17 @@ test_that("bgms functions satisfy user-visible return contract", {
       )
     )
   )
-  
+
   # ---------------------------------------------------------------------------
   # Execute specs and assert contract
   # ---------------------------------------------------------------------------
+  results <- list()
   for (spec in tests) {
-    
+
     # ACT: run the function under test with a controlled configuration.
     result <- do.call(spec$fun, spec$args)
-    
+    results[[spec$label]] <- result  # store for extractor functions
+
     # ASSERT 1: required top-level fields exist.
     # This is the primary "public API doesn't change silently" check.
     missing <- setdiff(spec$expected_fields, names(result))
@@ -123,7 +125,7 @@ test_that("bgms functions satisfy user-visible return contract", {
         if (length(missing) == 0) "<none>" else paste(missing, collapse = ", ")
       )
     )
-    
+
     # ASSERT 2: selected outputs are matrices with correct shape (p x p),
     # and contain at least some non-NA values.
     #
@@ -131,13 +133,13 @@ test_that("bgms functions satisfy user-visible return contract", {
     # (but missing fields are already caught above).
     for (fld in spec$matrix_fields) {
       if (!fld %in% names(result)) next
-      
+
       actual_dim <- if (!is.null(result[[fld]])) {
         paste(dim(result[[fld]]), collapse = "x")
       } else {
         "NULL"
       }
-      
+
       expect_equal(
         dim(result[[fld]]),
         c(p, p),
@@ -150,7 +152,7 @@ test_that("bgms functions satisfy user-visible return contract", {
           actual_dim
         )
       )
-      
+
       expect_false(
         all(is.na(result[[fld]])),
         info = sprintf(
@@ -162,4 +164,40 @@ test_that("bgms functions satisfy user-visible return contract", {
       )
     }
   }
+
+  # Test extractor functions --
+  # does not test:
+  #   extract_edge_indicators (deprecated)
+  #   extract_pairwise_thresholds (deprecated)
+  #   sbm extractors (require that the model is fit with the sbm model)
+  extractors_both <- c(
+    extract_arguments, extract_indicators, extract_posterior_inclusion_probabilities,
+    extract_indicator_priors, extract_pairwise_interactions,
+    extract_category_thresholds,
+  )
+
+  extractors_bgmCompare <- c(
+    extract_group_params, extract_group_means
+  )
+
+  for (test in c("single_bgm", "compare_bgm")) {
+
+    result <- results[[test]]
+
+    # some way to obtain one set of extractor functions
+    extractors <- if (test == "single_bgm") {
+      extractors_both
+    } else {
+      c(extractors_both, extractors_bgmCompare)
+    }
+
+    for (ext in extractors) {
+
+      extractor_result <-  do.call(ext, list(result))
+      # expect_... # not sure what to test here beyond "it runs without error"
+      # ideally something on the output though
+
+    }
+  }
+
 })
