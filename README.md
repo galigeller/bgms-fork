@@ -7,6 +7,7 @@ Version](https://www.r-pkg.org/badges/version/bgms)](https://cran.r-project.org/
 [![tolerance-coverage](https://codecov.io/gh/galigeller/bgms-fork/branch/testcov-badges/graph/badge.svg?flag=tolerance)](https://codecov.io/gh/galigeller/bgms-fork)
 [![bgms-coverage](https://codecov.io/gh/galigeller/bgms-fork/branch/testcov-badges/graph/badge.svg?flag=bgms)](https://codecov.io/gh/galigeller/bgms-fork)
 
+
 <!-- badges: end -->
 
 <div style="display:flex; align-items:center; justify-content:space-between;">
