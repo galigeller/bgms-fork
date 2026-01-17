@@ -5,6 +5,8 @@ Version](https://www.r-pkg.org/badges/version/bgms)](https://cran.r-project.org/
 [![Downloads](https://cranlogs.r-pkg.org/badges/bgms)](https://cran.r-project.org/package=bgms)
 [![Total](https://cranlogs.r-pkg.org/badges/grand-total/bgms)](https://cran.r-project.org/package=bgms)
 [![codecov](https://codecov.io/gh/galigeller/bgms-fork/branch/tests/graph/badge.svg)](https://app.codecov.io/gh/galigeller/bgms-fork/tree/tests)
+[![tolerance-cov](https://codecov.io/gh/galigeller/bgms-fork/branch/tests/graph/badge.svg?flag=tolerance)](https://app.codecov.io/gh/galigeller/bgms-fork/tree/tolerance-tests)
+
 <!-- badges: end -->
 
 <div style="display:flex; align-items:center; justify-content:space-between;">
