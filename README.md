@@ -4,9 +4,9 @@
 Version](https://www.r-pkg.org/badges/version/bgms)](https://cran.r-project.org/package=bgms)
 [![Downloads](https://cranlogs.r-pkg.org/badges/bgms)](https://cran.r-project.org/package=bgms)
 [![Total](https://cranlogs.r-pkg.org/badges/grand-total/bgms)](https://cran.r-project.org/package=bgms)
-[![tolerance-coverage](https://codecov.io/gh/galigeller/bgms-fork/tree/testcov-badges/main/graph/badge.svg?flag=tolerance)](https://codecov.io/gh/galigeller/bgms-fork)
+[![tolerance-coverage](https://codecov.io/gh/galigeller/bgms-fork/branch/testcov-badges/graph/badge.svg?flag=tolerance)](https://codecov.io/gh/galigeller/bgms-fork)
+[![bgms-coverage](https://codecov.io/gh/galigeller/bgms-fork/branch/testcov-badges/graph/badge.svg?flag=bgms)](https://codecov.io/gh/galigeller/bgms-fork)
 
-[![bgm-coverage](https://codecov.io/gh/galigeller/bgms-fork/tree/branch/testcov-badges/graph/badge.svg?flag=bgm)](https://codecov.io/gh/galigeller/bgms-fork)
 <!-- badges: end -->
 
 <div style="display:flex; align-items:center; justify-content:space-between;">
