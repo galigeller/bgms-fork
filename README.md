@@ -4,8 +4,9 @@
 Version](https://www.r-pkg.org/badges/version/bgms)](https://cran.r-project.org/package=bgms)
 [![Downloads](https://cranlogs.r-pkg.org/badges/bgms)](https://cran.r-project.org/package=bgms)
 [![Total](https://cranlogs.r-pkg.org/badges/grand-total/bgms)](https://cran.r-project.org/package=bgms)
-[![tolerance-coverage](https://codecov.io/gh/galigeller/bgms-fork/branch/testcov-badges/graph/badge.svg?flag=tolerance)](https://codecov.io/gh/galigeller/bgms-fork)
-[![bgms-coverage](https://codecov.io/gh/galigeller/bgms-fork/branch/testcov-badges/graph/badge.svg?flag=bgms)](https://codecov.io/gh/galigeller/bgms-fork)
+[![tolerance coverage](https://img.shields.io/codecov/c/github/galigeller/bgms-fork/testcov-badges?flag=tolerance&label=tolerance)](https://codecov.io/gh/galigeller/bgms-fork)
+[![bgms coverage](https://img.shields.io/codecov/c/github/galigeller/bgms-fork/testcov-badges?flag=bgms&label=bgms)](https://codecov.io/gh/galigeller/bgms-fork)
+
 
 
 <!-- badges: end -->
